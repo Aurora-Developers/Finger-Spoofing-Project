@@ -1,6 +1,10 @@
 import numpy as np
 import pandas as pd
 from MLandPattern import MLandPattern as ML
+from tabulate import tabulate
+
+table = []
+headers = ["MVG", "Naive", "Tied Gaussian", "Tied Naive"]
 
 
 def load(pathname, vizualization=0):
@@ -30,6 +34,30 @@ def split_db(D, L, fraction, seed=0):
     return (DTR, LTR), (DTE, LTE)
 
 
+def Generative_models(
+    train_attributes, train_labels, test_attributes, prior_prob, test_labels, model
+):
+    if model.lower() == "mvg":
+        [Probabilities, Prediction, accuracy] = ML.MVG_log_classifier(
+            train_attributes, train_labels, test_attributes, prior_prob, test_labels
+        )
+    elif model.lower() == "naive":
+        [Probabilities, Prediction, accuracy] = ML.Naive_log_classifier(
+            train_attributes, train_labels, test_attributes, prior_prob, test_labels
+        )
+    elif model.lower() == "tied gaussian":
+        [Probabilities, Prediction, accuracy] = ML.TiedGaussian(
+            train_attributes, train_labels, test_attributes, prior_prob, test_labels
+        )
+        accuracy = round(accuracy * 100, 2)
+    elif model.lower() == "tied naive":
+        [Probabilities, Prediction, accuracy] = ML.Tied_Naive_classifier(
+            train_attributes, train_labels, test_attributes, prior_prob, test_labels
+        )
+        accuracy = round(accuracy * 100, 2)
+    return Probabilities, Prediction, accuracy
+
+
 if __name__ == "__main__":
     [full_train_att, full_train_label] = load(
         "/Users/pablomunoz/Desktop/Polito 2023-1/MachineLearning/Project/data/Train.txt"
@@ -41,56 +69,54 @@ if __name__ == "__main__":
         full_train_att, full_train_label, 2 / 3
     )
 
-    print("Accuracy with full dimensions: ")
+    table.append(["Full"])
+
     [MVGprob, MVGpredic, accuracy] = ML.MVG_log_classifier(
         train_att, train_label, test_att, priorProb, test_labels
     )
-    print(f"MVG: {accuracy}")
+    table[0].append(accuracy)
 
     [Naiveprob, Naivepredic, accuracy] = ML.Naive_log_classifier(
         train_att, train_label, test_att, priorProb, test_labels
     )
-    print(f"Naive Bayes: {accuracy}")
+    table[0].append(accuracy)
 
     [MVGprob, MVGpredic, accuracy] = ML.TiedGaussian(
         train_att, train_label, test_att, priorProb, test_labels
     )
-    print(f"Tied MVG: {round(accuracy*100,2)}")
+    table[0].append(round(accuracy * 100, 2))
 
     [Naiveprob, Naivepredic, accuracy] = ML.Tied_Naive_classifier(
         train_att, train_label, test_att, priorProb, test_labels
     )
-    print(f"Tied Naive Bayes: {round(accuracy*100,2)}")
+    table[0].append(round(accuracy * 100, 2))
 
-    print()
-
-    print("PCA\tMVG\tNaive\tTied MVG\tTied Naive")
-
+    cont = 1
     for i in reversed(range(10)):
         if i < 2:
             break
-        reduced_train = ML.PCA(train_att, i)
-        reduced_test = ML.PCA(test_att, i)
+        P, reduced_train = ML.PCA(train_att, i)
+        reduced_test = np.dot(P.T, test_att)
 
-        print(f"PCA{i} ", end="\t")
-        [MVGprob, MVGpredic, accuracy] = ML.MVG_log_classifier(
-            reduced_train, train_label, reduced_test, priorProb, test_labels
-        )
-        print(accuracy, end="\t")
-
-        [Naiveprob, Naivepredic, accuracy] = ML.Naive_log_classifier(
-            reduced_train, train_label, reduced_test, priorProb, test_labels
-        )
-        print(accuracy, end="\t")
-
-        [MVGprob, MVGpredic, accuracy] = ML.TiedGaussian(
-            reduced_train, train_label, reduced_test, priorProb, test_labels
-        )
-        print(round(accuracy * 100, 2), end="\t")
-
-        [Naiveprob, Naivepredic, accuracy] = ML.Tied_Naive_classifier(
-            reduced_train, train_label, reduced_test, priorProb, test_labels
-        )
-        print(round(accuracy * 100, 2))
-
-        print()
+        table.append([f"PCA {i}"])
+        for model in headers:
+            [MVGprob, MVGpredic, accuracy] = Generative_models(
+                reduced_train, train_label, reduced_test, priorProb, test_labels, model
+            )
+            table[cont].append(accuracy)
+        cont += 1
+        for j in reversed(range(i)):
+            if j < 2:
+                break
+            table.append([f"PCA {i} LDA {j}"])
+            W, _ = ML.LDA1(reduced_train, train_label, j)
+            LDA_train = np.dot(W.T, reduced_train)
+            LDA_test = np.dot(W.T, reduced_test)
+            for model in headers:
+                [MVGprob, MVGpredic, accuracy] = Generative_models(
+                    LDA_train, train_label, LDA_test, priorProb, test_labels, model
+                )
+                table[cont].append(accuracy)
+            cont += 1
+    headers = ["Dimensions"] + headers
+    print(tabulate(table, headers=headers))
