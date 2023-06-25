@@ -41,30 +41,56 @@ if __name__ == "__main__":
         full_train_att, full_train_label, 2 / 3
     )
 
-    print("Prediction with full dimensions: ")
-    print("MVG: ")
+    print("Accuracy with full dimensions: ")
+    [MVGprob, MVGpredic, accuracy] = ML.MVG_log_classifier(
+        train_att, train_label, test_att, priorProb, test_labels
+    )
+    print(f"MVG: {accuracy}")
 
-    [MVGprob, MVGpredic] = ML.MVG_log_classifier(
+    [Naiveprob, Naivepredic, accuracy] = ML.Naive_log_classifier(
         train_att, train_label, test_att, priorProb, test_labels
     )
-    print("Naive Bayes")
-    [Naiveprob, Naivepredic] = ML.Naive_log_classifier(
+    print(f"Naive Bayes: {accuracy}")
+
+    [MVGprob, MVGpredic, accuracy] = ML.TiedGaussian(
         train_att, train_label, test_att, priorProb, test_labels
     )
+    print(f"Tied MVG: {round(accuracy*100,2)}")
+
+    [Naiveprob, Naivepredic, accuracy] = ML.Tied_Naive_classifier(
+        train_att, train_label, test_att, priorProb, test_labels
+    )
+    print(f"Tied Naive Bayes: {round(accuracy*100,2)}")
+
     print()
+
+    print("PCA\tMVG\tNaive\tTied MVG\tTied Naive")
 
     for i in reversed(range(10)):
         if i < 2:
             break
-        reduced_train = np.dot(ML.PCA(train_att, i).T, train_att)
-        reduced_test = np.dot(ML.PCA(test_att, i).T, test_att)
-        print(f"Prediction with {i} dimensions: ")
-        print("MVG: ")
-        [MVGprob, MVGpredic] = ML.MVG_log_classifier(
+        reduced_train = ML.PCA(train_att, i)
+        reduced_test = ML.PCA(test_att, i)
+
+        print(f"PCA{i} ", end="\t")
+        [MVGprob, MVGpredic, accuracy] = ML.MVG_log_classifier(
             reduced_train, train_label, reduced_test, priorProb, test_labels
         )
-        print("Naive Bayes")
-        [Naiveprob, Naivepredic] = ML.Naive_log_classifier(
+        print(accuracy, end="\t")
+
+        [Naiveprob, Naivepredic, accuracy] = ML.Naive_log_classifier(
             reduced_train, train_label, reduced_test, priorProb, test_labels
         )
+        print(accuracy, end="\t")
+
+        [MVGprob, MVGpredic, accuracy] = ML.TiedGaussian(
+            reduced_train, train_label, reduced_test, priorProb, test_labels
+        )
+        print(round(accuracy * 100, 2), end="\t")
+
+        [Naiveprob, Naivepredic, accuracy] = ML.Tied_Naive_classifier(
+            reduced_train, train_label, reduced_test, priorProb, test_labels
+        )
+        print(round(accuracy * 100, 2))
+
         print()
