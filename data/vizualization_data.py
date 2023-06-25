@@ -137,9 +137,23 @@ def mrow(matrix, vector):
     return row_vector
 
 
+def PCA(attribute_matrix, m):
+    """
+    Calculates the PCA dimension reduction of a matrix to a m-dimension sub-space
+    :param attribute_matrix: matrix with the datapoints, with each row being a point
+    :param m: number of dimensions of the targeted sub-space
+    :return: The dataset after the dimensionality reduction
+    """
+    DC = ML.center_data(attribute_matrix)
+    C = ML.covariance(attribute_matrix)
+    s, U = ML.eigen(C)
+    P = U[:, ::-1][:, 0:m]
+    return np.dot(P.T, attribute_matrix)
+
+
 if __name__ == "__main__":
     [attributes, labels] = load(
-        "/Users/pablomunoz/Desktop/Polito 2023-1/MachineLearning/Project/data/Test.txt"
+        "/Users/pablomunoz/Desktop/Polito 2023-1/MachineLearning/Project/data/Train.txt"
     )
     print(f"Attribute dimensions: {attributes.shape[0]}")
     print(f"Points on the dataset: {attributes.shape[1]}")
@@ -152,7 +166,6 @@ if __name__ == "__main__":
         else:
             m = int(input("Number of dimensions: "))
             copy_attributes = ML.PCA(attributes, m)
-            # independent_graph(copy_attributes)
-            # graficar(copy_attributes)
-            print(np.mean(copy_attributes, axis=1))
+            independent_graph(copy_attributes)
+            graficar(copy_attributes)
         configure = input("Analyze whole dataset (1), or a PCA reduction (2) exit(0): ")
