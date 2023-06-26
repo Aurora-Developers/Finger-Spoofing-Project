@@ -207,30 +207,16 @@ if __name__ == "__main__":
     priorProb = ML.vcol(np.ones(2) * 0.5)
 
     ### ------------- PCA WITH 2/3 SPLIT ---------------------- ####
-    (train_att, train_label), (test_att, test_labels) = split_db(
+    (train_att, train_label), (test_att, test_labels) = ML.split_db(
         full_train_att, full_train_label, 2 / 3
     )
     tablePCA.append(["Full"])
 
-    [MVGprob, MVGpredic, accuracy] = ML.MVG_log_classifier(
-        train_att, train_label, test_att, priorProb, test_labels
-    )
-    tablePCA[0].append(accuracy)
-
-    [Naiveprob, Naivepredic, accuracy] = ML.Naive_log_classifier(
-        train_att, train_label, test_att, priorProb, test_labels
-    )
-    tablePCA[0].append(accuracy)
-
-    [MVGprob, MVGpredic, accuracy] = ML.TiedGaussian(
-        train_att, train_label, test_att, priorProb, test_labels
-    )
-    tablePCA[0].append(round(accuracy * 100, 2))
-
-    [Naiveprob, Naivepredic, accuracy] = ML.Tied_Naive_classifier(
-        train_att, train_label, test_att, priorProb, test_labels
-    )
-    tablePCA[0].append(round(accuracy * 100, 2))
+    for model in headers:
+        [modelS, _, accuracy] = ML.Generative_models(
+            train_att, train_label, test_att, priorProb, test_labels, model
+        )
+        tablePCA[0].append(accuracy)
 
     cont = 1
     for i in reversed(range(10)):
@@ -241,7 +227,7 @@ if __name__ == "__main__":
 
         tablePCA.append([f"PCA {i}"])
         for model in headers:
-            [MVGprob, MVGpredic, accuracy] = Generative_models(
+            [modelS, _, accuracy] = ML.Generative_models(
                 reduced_train, train_label, reduced_test, priorProb, test_labels, model
             )
             tablePCA[cont].append(accuracy)
@@ -250,18 +236,17 @@ if __name__ == "__main__":
             if j < 2:
                 break
             tablePCA.append([f"PCA {i} LDA {j}"])
-            W, _ = LDA1(reduced_train, train_label, j)
+            W, _ = ML.LDA1(reduced_train, train_label, j)
             LDA_train = np.dot(W.T, reduced_train)
             LDA_test = np.dot(W.T, reduced_test)
             for model in headers:
-                [MVGprob, MVGpredic, accuracy] = Generative_models(
+                [modelS, _, accuracy] = ML.Generative_models(
                     LDA_train, train_label, LDA_test, priorProb, test_labels, model
                 )
                 tablePCA[cont].append(accuracy)
             cont += 1
 
     print("PCA with a 2/3 split")
-    headers = ["Dimensions"] + headers
     print(tabulate(tablePCA, headers=headers))
 
     ### ------------- k-fold with different PCA ---------------------- ####
@@ -282,7 +267,7 @@ if __name__ == "__main__":
 
         tableKFold.append([f"PCA {i}"])
         for model in headers:
-            [accuracy, model] = k_fold(
+            [accuracy, model] = ML.k_fold(
                 k_fold_value,
                 full_train_att,
                 full_train_label,
@@ -298,7 +283,7 @@ if __name__ == "__main__":
                 break
             tableKFold.append([f"PCA {i} LDA {j}"])
             for model in headers:
-                [accuracy, model] = k_fold(
+                [accuracy, model] = ML.k_fold(
                     k_fold_value,
                     full_train_att,
                     full_train_label,

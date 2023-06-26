@@ -166,7 +166,7 @@ if __name__ == "__main__":
             graficar(attributes)
         else:
             m = int(input("Number of dimensions: "))
-            copy_attributes = ML.PCA(attributes, m)
+            _, copy_attributes = ML.PCA(attributes, m)
             independent_graph(copy_attributes)
             graficar(copy_attributes)
         configure = input("Analyze whole dataset (1), or a PCA reduction (2) exit(0): ")
