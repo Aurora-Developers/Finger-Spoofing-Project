@@ -2,7 +2,10 @@ import pandas as pd
 import numpy as np
 from matplotlib import pyplot as plt
 import os
-import MLandPattern.MLandPattern as ML
+import sys
+
+sys.path.append(os.path.abspath("MLandPattern"))
+import MLandPattern as ML
 
 class_label = ["0", "1"]
 attribute_names = []
@@ -11,7 +14,6 @@ alpha_val = 0.5
 
 def load(pathname, vizualization=0):
     df = pd.read_csv(pathname, header=None)
-    print(df.dtypes)
     if vizualization:
         print(df.head())
     attribute = np.array(df.iloc[:, 0 : len(df.columns) - 1])

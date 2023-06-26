@@ -602,7 +602,7 @@ def Generative_models(
     return Probabilities, Prediction, accuracy
 
 
-def k_fold(k, attributes, labels, previous_prob, model="mvg", PCA_m=0):
+def k_fold(k, attributes, labels, previous_prob, model="mvg", PCA_m=0, LDA_m=0):
     """
     Applies a k-fold cross validation on the dataset, applying the specified model.
     :param: `k` Number of partitions to divide the dataset
@@ -632,6 +632,10 @@ def k_fold(k, attributes, labels, previous_prob, model="mvg", PCA_m=0):
             if PCA_m:
                 P, train_att = PCA(train_att, PCA_m)
                 validation_att = np.dot(P.T, validation_att)
+                if LDA_m:
+                    W, _ = LDA1(train_att, train_labels, LDA_m)
+                    train_att = np.dot(W.T, train_att)
+                    validation_att = np.dot(W.T, validation_att)
             [S, _, acc] = Generative_models(
                 train_att,
                 train_labels,
@@ -656,6 +660,10 @@ def k_fold(k, attributes, labels, previous_prob, model="mvg", PCA_m=0):
         if PCA_m:
             P, train_att = PCA(train_att, PCA_m)
             validation_att = np.dot(P.T, validation_att)
+            if LDA_m:
+                W, _ = LDA1(train_att, train_labels, LDA_m)
+                train_att = np.dot(W.T, train_att)
+                validation_att = np.dot(W.T, validation_att)
         [S, _, acc] = Generative_models(
             train_att,
             train_labels,
@@ -669,3 +677,52 @@ def k_fold(k, attributes, labels, previous_prob, model="mvg", PCA_m=0):
     final_acc /= k
     final_S /= k
     return final_acc, final_S
+
+
+def logreg_obj(v, DTR, LTR, l):
+    """
+    Method to calculate the error of a function based on the data points
+    :param v: Vector of the values to evaluate [w, b]
+    :param DTR: Matrix with all the train attributes
+    :param LTR: Matrix with all the train labels
+    :param l: Hyperparameter l to apply to the function
+    :return: retFunc the value of evaluating the function on the input parameter v
+    """
+    n = DTR.shape[1]
+    w, b = v[0:-1], v[-1]
+    log_sum = 0
+    for i in range(n):
+        zi = 1 if LTR[i] else -1
+        inter_sol = -zi * (np.dot(w.T, DTR[:, i]) + b)
+        log_sum += np.logaddexp(0, inter_sol)
+    retFunc = l / 2 * np.power(np.linalg.norm(w), 2) + 1 / n * log_sum
+    return retFunc
+
+
+def binaryRegression(train_attributes, train_labels, l, test_attributes, test_labels):
+    """
+    Method to calculate the error of a function based on the data points
+    :param train_attributes: Matrix with all the train attributes
+    :param train_labels: Matrix with all the train labels
+    :param l: Hyperparameter l to apply to the function
+    :param test_attributes: Matrix with all the train attributes
+    :param test_labels: Matrix with all the train labels
+    :return S: matrix associated with the probability array
+    :return predictions: Vector associated with the prediction of the class for each test data point
+    :return acc: Accuracy of the validation set
+    """
+    x0 = np.zeros(train_attributes.shape[0] + 1)
+    x, f, d = scipy.optimize.fmin_l_bfgs_b(
+        logreg_obj, x0, approx_grad=True, args=(train_attributes, train_labels, l)
+    )
+    w, b = x[0:-1], x[-1]
+    S = np.dot(w.T, test_attributes) + b
+    funct = lambda s: 1 if s > 0 else 0
+    predictions = np.array(list(map(funct, S)))
+    acc = 0
+    for i in range(test_labels.shape[0]):
+        if predictions[i] == test_labels[i]:
+            acc += 1
+    acc /= test_labels.size
+
+    return w, S, acc * 100

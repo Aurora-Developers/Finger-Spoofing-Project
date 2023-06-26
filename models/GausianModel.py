@@ -1,9 +1,12 @@
 import numpy as np
 import pandas as pd
-from MLandPattern import MLandPattern as ML
 import scipy
 import os
 from tabulate import tabulate
+import sys
+
+sys.path.append(os.path.abspath("MLandPattern"))
+import MLandPattern as ML
 
 tablePCA = []
 tableKFold = []
