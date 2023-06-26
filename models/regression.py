@@ -70,7 +70,7 @@ if __name__ == "__main__":
         tablePCA.append([f"PCA {i}"])
 
         [modelS, _, accuracy] = ML.binaryRegression(
-            train_att, train_label, l, test_att, test_labels
+            reduced_train, train_label, l, reduced_test, test_labels
         )
         tablePCA[cont].append(accuracy)
         cont += 1
@@ -82,7 +82,7 @@ if __name__ == "__main__":
             LDA_train = np.dot(W.T, reduced_train)
             LDA_test = np.dot(W.T, reduced_test)
             [modelS, _, accuracy] = ML.binaryRegression(
-                train_att, train_label, l, test_att, test_labels
+                LDA_train, train_label, l, LDA_test, test_labels
             )
             tablePCA[cont].append(accuracy)
             cont += 1

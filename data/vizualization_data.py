@@ -24,6 +24,9 @@ def load(pathname, vizualization=0):
     return attribute, label
 
 
+jhb
+
+
 def histogram_1n(setosa, versicolor, x_axis="", y_axis=""):
     plt.hist(setosa, color="blue", alpha=alpha_val, label=class_label[0], density=True)
     plt.hist(

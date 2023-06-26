@@ -724,5 +724,6 @@ def binaryRegression(train_attributes, train_labels, l, test_attributes, test_la
         if predictions[i] == test_labels[i]:
             acc += 1
     acc /= test_labels.size
+    acc = round(acc * 100, 2)
 
-    return w, S, acc * 100
+    return w, S, acc
