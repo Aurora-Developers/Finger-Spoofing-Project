@@ -122,10 +122,85 @@ def LDA1(matrix_values, label, m):
     return W, U
 
 
+def k_fold(k, attributes, labels, previous_prob, model="mvg", PCA_m=0, LDA_m=0):
+    """
+    Applies a k-fold cross validation on the dataset, applying the specified model.
+    :param: `k` Number of partitions to divide the dataset
+    :param: `attributes` matrix containing the whole training attributes of the dataset
+    :param: `labels` the label vector related to the attribute matrix
+    :param: `previous_prob` the column vector related to the prior probability of the dataset
+    :param: `model` (optional). Defines the model to be applied to the model:
+        - `mvg`: Multivariate Gaussian Model
+        - `Naive`: Naive Bayes Classifier
+        - `Tied Gaussian`: Tied Multivariate Gaussian Model
+        - `Tied naive`: Tied Naive Bayes Classifier
+    :return final_acc: Accuracy of the validation set
+    :return final_S: matrix associated with the probability array
+    """
+    section_size = int(attributes.shape[1] / k)
+    cont = 0
+    low = 0
+    high = section_size
+    final_acc = -1
+    model = model.lower()
+    for i in range(k):
+        if not i:
+            validation_att = attributes[:, low:high]
+            validation_labels = labels[low:high]
+            train_att = attributes[:, high:]
+            train_labels = labels[high:]
+            if PCA_m:
+                P, train_att = ML.PCA(train_att, PCA_m)
+                validation_att = np.dot(P.T, validation_att)
+                if LDA_m:
+                    W, _ = ML.LDA1(train_att, train_labels, LDA_m)
+                    train_att = np.dot(W.T, train_att)
+                    validation_att = np.dot(W.T, validation_att)
+            [S, _, acc] = Generative_models(
+                train_att,
+                train_labels,
+                validation_att,
+                previous_prob,
+                validation_labels,
+                model,
+            )
+            final_acc = acc
+            final_S = S
+            continue
+        low += section_size
+        high += section_size
+        if high > attributes.shape[1]:
+            high = attributes.shape
+        validation_att = attributes[:, low:high]
+        validation_labels = labels[low:high]
+        train_att = attributes[:, :low]
+        train_labels = labels[:low]
+        train_att = np.hstack((train_att, attributes[:, high:]))
+        train_labels = np.hstack((train_labels, labels[high:]))
+        if PCA_m:
+            P, train_att = ML.PCA(train_att, PCA_m)
+            validation_att = np.dot(P.T, validation_att)
+            if LDA_m:
+                W, _ = ML.LDA1(train_att, train_labels, LDA_m)
+                train_att = np.dot(W.T, train_att)
+                validation_att = np.dot(W.T, validation_att)
+        [S, _, acc] = Generative_models(
+            train_att,
+            train_labels,
+            validation_att,
+            previous_prob,
+            validation_labels,
+            model,
+        )
+        final_acc += acc
+        final_S += S
+    final_acc /= k
+    final_S /= k
+    return final_acc, final_S
+
+
 if __name__ == "__main__":
-    [full_train_att, full_train_label] = load(
-        "/Users/pablomunoz/Desktop/Polito 2023-1/MachineLearning/Project/data/Train.txt"
-    )
+    [full_train_att, full_train_label] = load("data/Train.txt")
 
     priorProb = ML.vcol(np.ones(2) * 0.5)
 
@@ -202,12 +277,16 @@ if __name__ == "__main__":
     for i in reversed(range(10)):
         if i < 2:
             break
-        P, reduced_train = ML.PCA(full_train_att, i)
 
         tableKFold.append([f"PCA {i}"])
         for model in headers:
-            [accuracy, model] = ML.k_fold(
-                k_fold_value, reduced_train, full_train_label, priorProb, model
+            [accuracy, model] = k_fold(
+                k_fold_value,
+                full_train_att,
+                full_train_label,
+                priorProb,
+                model,
+                PCA_m=i,
             )
             tableKFold[cont].append(accuracy)
 
@@ -216,11 +295,15 @@ if __name__ == "__main__":
             if j < 2:
                 break
             tableKFold.append([f"PCA {i} LDA {j}"])
-            W, _ = LDA1(reduced_train, full_train_label, j)
-            LDA_train = np.dot(W.T, reduced_train)
             for model in headers:
-                [accuracy, model] = ML.k_fold(
-                    k_fold_value, LDA_train, full_train_label, priorProb, model
+                [accuracy, model] = k_fold(
+                    k_fold_value,
+                    full_train_att,
+                    full_train_label,
+                    priorProb,
+                    model,
+                    PCA_m=i,
+                    LDA_m=j,
                 )
                 tableKFold[cont].append(accuracy)
             cont += 1

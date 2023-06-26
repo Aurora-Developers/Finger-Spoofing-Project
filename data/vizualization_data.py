@@ -10,6 +10,7 @@ alpha_val = 0.5
 
 def load(pathname, vizualization=0):
     df = pd.read_csv(pathname, header=None)
+    print(df.dtypes)
     if vizualization:
         print(df.head())
     attribute = np.array(df.iloc[:, 0 : len(df.columns) - 1])
@@ -58,7 +59,7 @@ def graficar(attributes):
     size1 = round(attributes.shape[0] / 2 + 0.5)
     if attributes.shape[0] > 8:
         dimension = input(
-            f"Input: \n- Dimension to evalueate (1 to ${attributes.shape[0]}).\n- 0 to exit. \n"
+            f"Input: \n- Dimension to evalueate (1 to {attributes.shape[0]}).\n- 0 to exit. \n"
         )
         dimension = str(int(dimension) - 1)
         while dimension != "-1":
@@ -77,7 +78,7 @@ def graficar(attributes):
                     cont += 1
             plt.show()
             dimension = input(
-                f"Input: \n- Dimension to evalueate (1 to ${attributes.shape[0]}).\n- ${attributes.shape[0]-1} to show all ${attributes.shape[0]} dimensions. \n - 0 to exit: "
+                f"Input: \n- Dimension to evalueate (1 to {attributes.shape[0]}). \n - 0 to exit: "
             )
             dimension = str(int(dimension) - 1)
     else:
@@ -152,17 +153,15 @@ def PCA(attribute_matrix, m):
 
 
 if __name__ == "__main__":
-    [attributes, labels] = load(
-        "/Users/pablomunoz/Desktop/Polito 2023-1/MachineLearning/Project/data/Train.txt"
-    )
+    [attributes, labels] = load("data/Train.txt")
     print(f"Attribute dimensions: {attributes.shape[0]}")
     print(f"Points on the dataset: {attributes.shape[1]}")
     print(f"Possible classes: {class_label[0]}, {class_label[1]}")
     configure = input("Analyze whole dataset (1), or a PCA reduction (2) exit(0): ")
     while configure != "0":
         if configure == "1":
-            graficar(attributes)
             independent_graph(attributes)
+            graficar(attributes)
         else:
             m = int(input("Number of dimensions: "))
             copy_attributes = ML.PCA(attributes, m)
