@@ -2,6 +2,7 @@ import numpy as np
 import pandas as pd
 from MLandPattern import MLandPattern as ML
 import scipy
+import os
 from tabulate import tabulate
 
 tablePCA = []
@@ -200,7 +201,8 @@ def k_fold(k, attributes, labels, previous_prob, model="mvg", PCA_m=0, LDA_m=0):
 
 
 if __name__ == "__main__":
-    [full_train_att, full_train_label] = load("data/Train.txt")
+    path = os.path.abspath("data/Train.txt")
+    [full_train_att, full_train_label] = load(path)
 
     priorProb = ML.vcol(np.ones(2) * 0.5)
 

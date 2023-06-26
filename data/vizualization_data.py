@@ -1,6 +1,7 @@
 import pandas as pd
 import numpy as np
 from matplotlib import pyplot as plt
+import os
 import MLandPattern.MLandPattern as ML
 
 class_label = ["0", "1"]
@@ -153,7 +154,8 @@ def PCA(attribute_matrix, m):
 
 
 if __name__ == "__main__":
-    [attributes, labels] = load("data/Train.txt")
+    path = os.path.abspath("data/Train.txt")
+    [attributes, labels] = load(path)
     print(f"Attribute dimensions: {attributes.shape[0]}")
     print(f"Points on the dataset: {attributes.shape[1]}")
     print(f"Possible classes: {class_label[0]}, {class_label[1]}")
