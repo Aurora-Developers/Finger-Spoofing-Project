@@ -46,12 +46,11 @@ if __name__ == "__main__":
 
     priorProb = ML.vcol(np.ones(2) * 0.5)
 
+    l = float(input("Lambda parameter: "))
     ### ------------- PCA WITH 2/3 SPLIT ---------------------- ####
     (train_att, train_label), (test_att, test_labels) = ML.split_db(
         full_train_att, full_train_label, 2 / 3
     )
-
-    l = 0.001
 
     tablePCA.append(["Full"])
 
@@ -89,3 +88,47 @@ if __name__ == "__main__":
 
     print("PCA with a 2/3 split")
     print(tabulate(tablePCA, headers=headers))
+
+    ### K-fold binomial Regression ###
+
+    tableKFold.append(["Full"])
+
+    print(f"Size of dataset: {full_train_att.shape[1]}")
+    k = int(input("Number of partitions: "))
+
+    [accuracy, modelS] = ML.k_fold(
+        k, full_train_att, full_train_label, priorProb, "regression", l=l
+    )
+    tableKFold[0].append(accuracy)
+
+    cont = 1
+    for i in reversed(range(10)):
+        if i < 2:
+            break
+
+        tableKFold.append([f"PCA {i}"])
+        [accuracy, model] = ML.k_fold(
+            k, full_train_att, full_train_label, priorProb, "regression", PCA_m=i, l=l
+        )
+        tableKFold[cont].append(accuracy)
+
+        cont += 1
+        for j in reversed(range(i)):
+            if j < 2:
+                break
+            tableKFold.append([f"PCA {i} LDA {j}"])
+            [accuracy, model] = ML.k_fold(
+                k,
+                full_train_att,
+                full_train_label,
+                priorProb,
+                "regression",
+                PCA_m=i,
+                LDA_m=j,
+                l=l,
+            )
+            tableKFold[cont].append(accuracy)
+            cont += 1
+
+    print("PCA with k-fold")
+    print(tabulate(tableKFold, headers=headers))
