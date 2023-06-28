@@ -602,7 +602,9 @@ def Generative_models(
     return Probabilities, Prediction, accuracy
 
 
-def k_fold(k, attributes, labels, previous_prob, model="mvg", PCA_m=0, LDA_m=0):
+def k_fold(
+    k, attributes, labels, previous_prob, model="mvg", PCA_m=0, LDA_m=0, l=0.001
+):
     """
     Applies a k-fold cross validation on the dataset, applying the specified model.
     :param: `k` Number of partitions to divide the dataset
@@ -614,6 +616,10 @@ def k_fold(k, attributes, labels, previous_prob, model="mvg", PCA_m=0, LDA_m=0):
         - `Naive`: Naive Bayes Classifier
         - `Tied Gaussian`: Tied Multivariate Gaussian Model
         - `Tied naive`: Tied Naive Bayes Classifier
+        - `Regression` : Binomial Regression
+    :param: `PCA_m` (optional) a number of dimensions to reduce using PCA method
+    :param: `LDA_m` (optional) a number of dimensions to reduce using LDA mehtod
+    :param: `l` (optional) hyperparameter to use when the method is linera regression, default value set to 0.001
     :return final_acc: Accuracy of the validation set
     :return final_S: matrix associated with the probability array
     """
@@ -636,14 +642,19 @@ def k_fold(k, attributes, labels, previous_prob, model="mvg", PCA_m=0, LDA_m=0):
                     W, _ = LDA1(train_att, train_labels, LDA_m)
                     train_att = np.dot(W.T, train_att)
                     validation_att = np.dot(W.T, validation_att)
-            [S, _, acc] = Generative_models(
-                train_att,
-                train_labels,
-                validation_att,
-                previous_prob,
-                validation_labels,
-                model,
-            )
+            if model == "regression":
+                [S, _, acc] = binaryRegression(
+                    train_att, train_labels, l, validation_att, validation_labels
+                )
+            else:
+                [S, _, acc] = Generative_models(
+                    train_att,
+                    train_labels,
+                    validation_att,
+                    previous_prob,
+                    validation_labels,
+                    model,
+                )
             final_acc = acc
             final_S = S
             continue
@@ -664,14 +675,19 @@ def k_fold(k, attributes, labels, previous_prob, model="mvg", PCA_m=0, LDA_m=0):
                 W, _ = LDA1(train_att, train_labels, LDA_m)
                 train_att = np.dot(W.T, train_att)
                 validation_att = np.dot(W.T, validation_att)
-        [S, _, acc] = Generative_models(
-            train_att,
-            train_labels,
-            validation_att,
-            previous_prob,
-            validation_labels,
-            model,
-        )
+        if model == "regression":
+            [S, _, acc] = binaryRegression(
+                train_att, train_labels, l, validation_att, validation_labels
+            )
+        else:
+            [S, _, acc] = Generative_models(
+                train_att,
+                train_labels,
+                validation_att,
+                previous_prob,
+                validation_labels,
+                model,
+            )
         final_acc += acc
         final_S += S
     final_acc /= k
@@ -691,10 +707,9 @@ def logreg_obj(v, DTR, LTR, l):
     n = DTR.shape[1]
     w, b = v[0:-1], v[-1]
     log_sum = 0
-    for i in range(n):
-        zi = 1 if LTR[i] else -1
-        inter_sol = -zi * (np.dot(w.T, DTR[:, i]) + b)
-        log_sum += np.logaddexp(0, inter_sol)
+    zi = LTR * 2 - 1
+    inter_sol = -zi * (np.dot(w.T, DTR) + b)
+    log_sum = np.sum(np.logaddexp(0, inter_sol))
     retFunc = l / 2 * np.power(np.linalg.norm(w), 2) + 1 / n * log_sum
     return retFunc
 
