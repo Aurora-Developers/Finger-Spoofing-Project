@@ -742,3 +742,123 @@ def binaryRegression(train_attributes, train_labels, l, test_attributes, test_la
     acc = round(acc * 100, 2)
 
     return w, S, acc
+
+
+def polynomial_kernel(xi, xj, d, C, eps):
+    interm = np.dot(xi.T, xj)
+    interm += C
+    G = np.add(np.power(interm, d), eps)
+    return G
+
+
+def radial_kernel(xi, xj, gamma, eps):
+    G = np.ones((xi.shape[1], xj.shape[1]))
+    for i in range(xi.shape[1]):
+        for j in range(xj.shape[1]):
+            absolute = np.linalg.norm(xi[:, i] - xj[:, j])
+            G[i, j] = -gamma * np.square(absolute)
+    G = np.add(np.exp(G), eps)
+    return G
+
+
+def dual_svm(
+    alpha,
+    training_att,
+    training_labels,
+    K=1,
+    d=0,
+    c=0,
+    eps=0,
+    gamma=0,
+    funct="polynomial",
+):
+    kern = funct.lower()
+    one = np.ones(training_att.shape[1])
+    zi = 2 * training_labels - 1
+    z = np.dot(zi, zi.T)
+    if kern == "polynomial":
+        G = polynomial_kernel(training_att, training_att, d, c, eps)
+    elif kern == "radial":
+        G = radial_kernel(training_att, training_att, gamma, eps=eps)
+    else:
+        D = np.ones(training_att.shape[1]) * K
+        D = np.vstack((training_att, D))
+        G = np.dot(D.T, D)
+    # H = np.zeros((training_att.shape[1], training_att.shape[1]))
+    z = np.outer(zi, zi)
+    # for i in range(training_att.shape[1]):
+    #     for j in range(training_att.shape[1]):
+    #         H[i, j] = zi[i] * zi[j]
+    #         H[i, j] *= G[i, j]
+    H = np.multiply(z, G)
+    retFun = np.dot(alpha.T, H)
+    retFun = np.dot(retFun, alpha) / 2
+    retFun = retFun - np.dot(alpha.T, one)
+    retGrad = np.dot(H, alpha)
+    retGrad -= one
+    return (retFun, retGrad)
+
+
+def svm(
+    training_att,
+    training_labels,
+    test_att,
+    test_labels,
+    constrain,
+    model="",
+    dim=2,
+    c=1,
+    K=1,
+    gamma=1,
+    eps=0,
+):
+    """
+    Apply the Support Vector Machine model, using either one of the models described to approximate the soluction.
+    :param train_att: Matrix with all the train attributes
+    :param train_labels: Matrix with all the train labels
+    :param test_att: Matrix with all the train attributes
+    :param test_labels: Matrix with all the train labels
+    :param constrain: Constrain of maximum value of the alpha vector
+    :param model: (optional) define the applied kernel model:
+    - `polynomial`: polynomial kernel of degree d
+    - `Radial`: Radial Basis Function kernel
+    - Default: leave empty, and the dual SVM method is applied
+    :param dim: (optional) hyperparameter for polynomial method. `Default 2`
+    :param c: (optional) hyperparameter for polynomial method. `Default 1`
+    :param K: (optional) hyperparameter for dual SVM method. `Default 1`
+    :param gamma: (optional) hyperparameter for radial method. `Default 1`
+    :param eps: (optional) hyperparameter for kernel methods. `Default 0`
+    """
+    alp = np.ones(training_att.shape[1])
+    constrain = np.array([(0, constrain)] * training_att.shape[1])
+    [x, f, d] = scipy.optimize.fmin_l_bfgs_b(
+        dual_svm,
+        alp,
+        args=(training_att, training_labels, K, dim, c, eps, gamma, model),
+        bounds=constrain,
+    )
+    zi = 2 * training_labels - 1
+    kern = model.lower()
+    if kern == "polynomial":
+        S = x * zi
+        S = np.dot(S, polynomial_kernel(training_att, test_att, dim, c, eps))
+    elif kern == "radial":
+        S = x * zi
+        S = np.dot(S, radial_kernel(training_att, test_att, gamma, eps))
+    else:
+        D = np.ones(training_att.shape[1]) * K
+        D = np.vstack((training_att, D))
+        w = x * zi
+        w = w * D
+        w = np.sum(w, axis=1)
+        x_val = np.vstack((test_att, np.ones(test_att.shape[1]) * K))
+        S = np.dot(w.T, x_val)
+    funct = lambda s: 1 if s > 0 else 0
+    predictions = np.array(list(map(funct, S)))
+    acc = 0
+    for i in range(test_labels.shape[0]):
+        if predictions[i] == test_labels[i]:
+            acc += 1
+    acc /= test_labels.size
+
+    return acc
