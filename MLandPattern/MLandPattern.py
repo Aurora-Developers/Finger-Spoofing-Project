@@ -393,7 +393,7 @@ def MVG_log_classifier(
         # print(f'Accuracy: {acc}%')
         # print(f'Error: {(100 - acc)}%')
 
-    return logSMarginal, predictions, acc
+    return S, predictions, acc
 
 
 def Naive_classifier(
@@ -500,14 +500,12 @@ def TiedGaussian(train_data, train_labels, test_data, prior_probability, test_la
     multi_mu = multiclass_mean(train_data, train_labels)
     densities = []
     for i in range(class_labels.size):
-        densities.append(
-            np.exp(logLikelihood(test_data, vcol(multi_mu[i, :]), with_cov))
-        )
+        densities.append(logLikelihood(test_data, vcol(multi_mu[i, :]), with_cov))
     S = np.array(densities)
-
-    SJoint = S * prior_probability
-    SMarginal = vrow(SJoint.sum(0))
-    SPost = SJoint / SMarginal
+    logSJoint = S + np.log(prior_probability)
+    logSMarginal = vrow(scipy.special.logsumexp(logSJoint, axis=0))
+    logSPost = logSJoint - logSMarginal
+    SPost = np.exp(logSPost)
     predictions = np.argmax(SPost, axis=0)
 
     if len(test_label) != 0:
@@ -543,11 +541,12 @@ def Tied_Naive_classifier(
     multi_mu = multiclass_mean(train_data, train_labels)
     densities = []
     for i in range(class_labels.size):
-        densities.append(np.exp(logLikelihood(test_data, vcol(multi_mu[i, :]), cov)))
+        densities.append(logLikelihood(test_data, vcol(multi_mu[i, :]), cov))
     S = np.array(densities)
-    SJoint = S * prior_probability
-    SMarginal = vrow(SJoint.sum(0))
-    SPost = SJoint / SMarginal
+    logSJoint = S + np.log(prior_probability)
+    logSMarginal = vrow(scipy.special.logsumexp(logSJoint, axis=0))
+    logSPost = logSJoint - logSMarginal
+    SPost = np.exp(logSPost)
     predictions = np.argmax(SPost, axis=0)
 
     if len(test_label) != 0:
@@ -845,8 +844,8 @@ def svm(
         w = np.sum(w, axis=1)
         x_val = np.vstack((test_att, np.ones(test_att.shape[1]) * K))
         S = np.dot(w.T, x_val)
-    funct = lambda s: 1 if s > 0 else 0
-    predictions = np.array(list(map(funct, S)))
+    # funct = lambda s: 1 if s > 0 else 0
+    predictions = np.where(S > 0, 1, 0)
     error = np.abs(predictions - test_labels)
     error = np.sum(error)
     error /= test_labels.size
@@ -920,7 +919,10 @@ def Bayes_risk(confusion_matrix, pi, Cfn, Cfp):
 
 
 def minCostBayes(llr, labels, pi, Cfn, Cfp):
+    if llr.ndim > 1:
+        llr = (Cfn * llr[0, :]) / (Cfp * llr[1, :])
     sortedLLR = np.sort(llr)
+    # sortedLLR = pi * sortedLLR[0, :] / ((1 - pi) * sortedLLR[1, :])
     t = np.array([-np.inf, np.inf])
     t = np.append(t, sortedLLR)
     t = np.sort(t)
@@ -929,7 +931,9 @@ def minCostBayes(llr, labels, pi, Cfn, Cfp):
     FPRlist = []
     for i in t:
         threshold = i
-        decisions = np.where(llr > threshold, 1, 0)
+        funct = lambda s: 1 if s > i else 0
+        decisions = np.array(list(map(funct, llr)))
+        # decisions = np.where(llr > threshold, 1, 0)
 
         tp = np.sum(np.logical_and(decisions == 1, labels == 1))
         fp = np.sum(np.logical_and(decisions == 1, labels == 0))
@@ -945,13 +949,11 @@ def minCostBayes(llr, labels, pi, Cfn, Cfp):
         FNR = M01 / (M01 + M11)
         FPR = M10 / (M00 + M10)
 
-        DCF = pi * Cfn * FNR + (1 - pi) * Cfp * FPR
-
-        B = min(pi * Cfn, (1 - pi) * Cfp)
+        [DCF, DCFnormal] = Bayes_risk(confusion_matrix, pi, Cfn, Cfp)
 
         FNRlist = np.append(FNRlist, FNR)
         FPRlist = np.append(FPRlist, FPR)
-        DCFnorm = np.append(DCFnorm, DCF / B)
+        DCFnorm = np.append(DCFnorm, DCFnormal)
     minDCF = min(DCFnorm)
 
-    return round(minDCF, 2), FPRlist, FNRlist
+    return minDCF, FPRlist, FNRlist
