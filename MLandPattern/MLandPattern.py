@@ -643,11 +643,11 @@ def k_fold(
                     train_att = np.dot(W.T, train_att)
                     validation_att = np.dot(W.T, validation_att)
             if model == "regression":
-                [S, _, acc] = binaryRegression(
+                [S, prediction, acc] = binaryRegression(
                     train_att, train_labels, l, validation_att, validation_labels
                 )
             else:
-                [S, _, acc] = Generative_models(
+                [S, prediction, acc] = Generative_models(
                     train_att,
                     train_labels,
                     validation_att,
@@ -657,6 +657,7 @@ def k_fold(
                 )
             final_acc = acc
             final_S = S
+            final_prediction = prediction
             continue
         low += section_size
         high += section_size
@@ -676,11 +677,11 @@ def k_fold(
                 train_att = np.dot(W.T, train_att)
                 validation_att = np.dot(W.T, validation_att)
         if model == "regression":
-            [S, _, acc] = binaryRegression(
+            [S, prediction, acc] = binaryRegression(
                 train_att, train_labels, l, validation_att, validation_labels
             )
         else:
-            [S, _, acc] = Generative_models(
+            [S, prediction, acc] = Generative_models(
                 train_att,
                 train_labels,
                 validation_att,
@@ -692,7 +693,7 @@ def k_fold(
         final_S += S
     final_acc /= k
     final_S /= k
-    return final_acc, final_S
+    return final_S, prediction, final_acc
 
 
 def logreg_obj(v, DTR, LTR, l):
@@ -747,16 +748,13 @@ def binaryRegression(train_attributes, train_labels, l, test_attributes, test_la
 def polynomial_kernel(xi, xj, d, C, eps):
     interm = np.dot(xi.T, xj)
     interm += C
-    G = np.add(np.power(interm, d), eps)
+    G = np.power(interm, d) + eps
     return G
 
 
 def radial_kernel(xi, xj, gamma, eps):
-    G = np.ones((xi.shape[1], xj.shape[1]))
-    for i in range(xi.shape[1]):
-        for j in range(xj.shape[1]):
-            absolute = np.linalg.norm(xi[:, i] - xj[:, j])
-            G[i, j] = -gamma * np.square(absolute)
+    diff = xi[:, :, np.newaxis] - xj[:, np.newaxis, :]
+    G = -gamma * np.square(np.linalg.norm(diff, axis=0))
     G = np.add(np.exp(G), eps)
     return G
 
@@ -775,21 +773,14 @@ def dual_svm(
     kern = funct.lower()
     one = np.ones(training_att.shape[1])
     zi = 2 * training_labels - 1
-    z = np.dot(zi, zi.T)
     if kern == "polynomial":
         G = polynomial_kernel(training_att, training_att, d, c, eps)
     elif kern == "radial":
         G = radial_kernel(training_att, training_att, gamma, eps=eps)
     else:
-        D = np.ones(training_att.shape[1]) * K
-        D = np.vstack((training_att, D))
+        D = np.vstack((training_att, one * K))
         G = np.dot(D.T, D)
-    # H = np.zeros((training_att.shape[1], training_att.shape[1]))
     z = np.outer(zi, zi)
-    # for i in range(training_att.shape[1]):
-    #     for j in range(training_att.shape[1]):
-    #         H[i, j] = zi[i] * zi[j]
-    #         H[i, j] *= G[i, j]
     H = np.multiply(z, G)
     retFun = np.dot(alpha.T, H)
     retFun = np.dot(retFun, alpha) / 2
@@ -837,6 +828,7 @@ def svm(
         args=(training_att, training_labels, K, dim, c, eps, gamma, model),
         bounds=constrain,
     )
+    print(d["nit"])
     zi = 2 * training_labels - 1
     kern = model.lower()
     if kern == "polynomial":
@@ -855,10 +847,27 @@ def svm(
         S = np.dot(w.T, x_val)
     funct = lambda s: 1 if s > 0 else 0
     predictions = np.array(list(map(funct, S)))
-    acc = 0
-    for i in range(test_labels.shape[0]):
-        if predictions[i] == test_labels[i]:
-            acc += 1
-    acc /= test_labels.size
+    error = np.abs(predictions - test_labels)
+    error = np.sum(error)
+    error /= test_labels.size
 
-    return acc
+    return S, predictions, 1-error
+
+
+def calculate_model(S, test_points, model, prior_probability, test_labels=[]):
+    model = model.lower()
+    funct = lambda s: 1 if s > 0 else 0
+    if model == "Generative":
+        logSJoint = S + np.log(prior_probability)
+        logSMarginal = vrow(scipy.special.logsumexp(logSJoint, axis=0))
+        logSPost = logSJoint - logSMarginal
+        SPost = np.exp(logSPost)
+        predictions = np.argmax(SPost, axis=0)
+    elif model == "regression":
+        predictions = np.array(list(map(funct, S)))
+    else:
+        predictions = np.array(list(map(funct, S)))
+    if len(test_labels) != 0:
+        error = np.abs(test_labels - predictions)
+        error = np.sum(error)
+    return predictions, (1 - error)
