@@ -58,7 +58,7 @@ def Bayes_risk(confusion_matrix, pi, Cfn, Cfp):
     FNR = M01 / (M01 + M11)
     FPR = M10 / (M00 + M10)
 
-    DCF = pi * Cfn * FNR + (1 - pi) * Cfp * FPR
+    DCF = (pi * Cfn * FNR) + ((1 - pi) * Cfp * FPR)
 
     B = min(pi * Cfn, (1 - pi) * Cfp)
 
@@ -68,7 +68,10 @@ def Bayes_risk(confusion_matrix, pi, Cfn, Cfp):
 
 
 def minCostBayes(llr, labels, pi, Cfn, Cfp):
+    if llr.ndim > 1:
+        llr = (Cfn * llr[0, :]) / (Cfp * llr[1, :])
     sortedLLR = np.sort(llr)
+    # sortedLLR = pi * sortedLLR[0, :] / ((1 - pi) * sortedLLR[1, :])
     t = np.array([-np.inf, np.inf])
     t = np.append(t, sortedLLR)
     t = np.sort(t)
@@ -77,7 +80,9 @@ def minCostBayes(llr, labels, pi, Cfn, Cfp):
     FPRlist = []
     for i in t:
         threshold = i
-        decisions = np.where(llr > threshold, 1, 0)
+        funct = lambda s: 1 if s > i else 0
+        decisions = np.array(list(map(funct, llr)))
+        # decisions = np.where(llr > threshold, 1, 0)
 
         tp = np.sum(np.logical_and(decisions == 1, labels == 1))
         fp = np.sum(np.logical_and(decisions == 1, labels == 0))
@@ -93,13 +98,11 @@ def minCostBayes(llr, labels, pi, Cfn, Cfp):
         FNR = M01 / (M01 + M11)
         FPR = M10 / (M00 + M10)
 
-        DCF = pi * Cfn * FNR + (1 - pi) * Cfp * FPR
-
-        B = min(pi * Cfn, (1 - pi) * Cfp)
+        [DCF, DCFnormal] = Bayes_risk(confusion_matrix, pi, Cfn, Cfp)
 
         FNRlist = np.append(FNRlist, FNR)
         FPRlist = np.append(FPRlist, FPR)
-        DCFnorm = np.append(DCFnorm, DCF / B)
+        DCFnorm = np.append(DCFnorm, DCFnormal)
     minDCF = min(DCFnorm)
 
     return minDCF, FPRlist, FNRlist
@@ -131,8 +134,8 @@ def BayesErrorPlot(llr, labels, confusion_matrix, Cfn, Cfp):
     plt.figure()
     plt.plot(effPriorLogOdds, DCFlist, label="DCF", color="r")
     plt.plot(effPriorLogOdds, minDCFlist, label="min DCF", color="b")
-    plt.ylim([0, 7])
-    plt.xlim([-7, 7])
+    plt.ylim([0, 3])
+    plt.xlim([-1, 6])
     plt.show()
 
 
@@ -158,28 +161,28 @@ if __name__ == "__main__":
         full_train_att, full_train_label, 2 / 3
     )
 
-    [SPost, Predictions, accuracy] = ML.Generative_models(
-        train_att, train_label, test_att, priorProb, test_labels, "mvg"
+    # [SPost, Predictions, accuracy] = ML.Generative_models(
+    #     train_att, train_label, test_att, priorProb, test_labels, "tied naive"
+    # )
+
+    [_, SPost, accuracy] = ML.binaryRegression(
+        train_att, train_label, 0.001, test_att, test_labels
     )
 
-    # [_, SPost, accuracy] = ML.binaryRegression(
-    #     train_att, train_label, 1, test_att, test_labels
-    # )
-
-    # [Predictions, _] = ML.calculate_model(
-    #     SPost, test_att, "Regression", priorProb, test_labels
-    # )
+    [Predictions, _] = ML.calculate_model(
+        SPost, test_att, "Regression", priorProb, test_labels
+    )
 
     TableCM = ConfMat(Predictions, test_labels)
 
-    print("Confusion Matrix iris datasets tied covarience", TableCM, sep="\n")
+    # print("Confusion Matrix iris datasets tied covarience", TableCM, sep="\n")
 
     pi = 0.5
-    Cfn = 10
-    Cfp = 1
+    Cfn = 1
+    Cfp = 10
     x = np.argmax(SPost)
     confusion_matrix = OptimalBayes(SPost, test_labels, pi, Cfn, Cfp)
-    DCF, DCFnorm = Bayes_risk(confusion_matrix, pi, Cfn, Cfp)
+    DCF, DCFnorm = Bayes_risk(TableCM, pi, Cfn, Cfp)
     (minDCF, FPRlist, FNRlist) = minCostBayes(SPost, test_labels, pi, Cfn, Cfp)
 
     FPR = FPRlist
@@ -188,13 +191,13 @@ if __name__ == "__main__":
 
     print(f"Confusion Matrix 1 is:", f" {confusion_matrix}", sep="\n")
 
-    list = [DCF, DCFnorm, minDCF]
+    listVals = [DCF, DCFnorm, minDCF]
     tableBayes.append([f"({pi},{Cfn},{Cfp})"])
 
-    for i in list:
+    for i in listVals:
         tableBayes[0].append(i)
 
     print(tabulate(tableBayes, headers=headers))
 
     ROCcurve(FPR, FNR)
-    BayesErrorPlot(SPost, test_labels, CM, Cfn, Cfp)
+    BayesErrorPlot(SPost, test_labels, TableCM, Cfn, Cfp)
