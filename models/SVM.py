@@ -63,7 +63,7 @@ if __name__ == "__main__":
         for j in range(3):
             k = initial_K * np.power(10, j)
             tablePCA.append([f"C: {contrain}, K: {k}"])
-            accuracy = ML.svm(
+            [SPost, Predictions, accuracy] = ML.svm(
                 train_att, train_label, test_att, test_labels, contrain, K=k
             )
             cont += 1
@@ -80,7 +80,7 @@ if __name__ == "__main__":
         for j in range(2):
             const = initial_const + j
             tablePCA.append([f"C: {contrain} d: {d}, c: {const}"])
-            accuracy = ML.svm(
+            [SPost, Predictions, accuracy] = ML.svm(
                 train_att,
                 train_label,
                 test_att,
@@ -102,7 +102,7 @@ if __name__ == "__main__":
         for j in range(3):
             gamma = initial_gamma + j
             tablePCA.append([f"C: {contrain}, gamma: {gamma}"])
-            accuracy = ML.svm(
+            [SPost, Predictions, accuracy] = ML.svm(
                 train_att,
                 train_label,
                 test_att,
