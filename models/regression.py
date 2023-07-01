@@ -11,6 +11,9 @@ import MLandPattern as ML
 tablePCA = []
 tableKFold = []
 headers = ["Dimensions", "Logistic Regression"]
+pi = 0.5
+Cfn = 1
+Cfp = 10
 
 
 def load(pathname, vizualization=0):
@@ -54,10 +57,16 @@ if __name__ == "__main__":
 
     tablePCA.append(["Full"])
 
-    [modelS, _, accuracy] = ML.binaryRegression(
-        train_att, train_label, l, test_att, test_labels
+    [_, SPost, accuracy] = ML.binaryRegression(
+        train_att, train_label, 0.001, test_att, test_labels
     )
-    tablePCA[0].append(accuracy)
+    [Predictions, _] = ML.calculate_model(
+        SPost, test_att, "Regression", priorProb, test_labels
+    )
+    confusion_matrix = ML.ConfMat(Predictions, test_labels)
+    DCF, DCFnorm = ML.Bayes_risk(confusion_matrix, pi, Cfn, Cfp)
+    (minDCF, _, _) = ML.minCostBayes(SPost, test_labels, pi, Cfn, Cfp)
+    tablePCA[0].append([accuracy, DCFnorm, minDCF])
 
     cont = 1
     for i in reversed(range(10)):
@@ -68,10 +77,16 @@ if __name__ == "__main__":
 
         tablePCA.append([f"PCA {i}"])
 
-        [modelS, _, accuracy] = ML.binaryRegression(
+        [_, SPost, accuracy] = ML.binaryRegression(
             reduced_train, train_label, l, reduced_test, test_labels
         )
-        tablePCA[cont].append(accuracy)
+        [Predictions, _] = ML.calculate_model(
+            SPost, test_att, "Regression", priorProb, test_labels
+        )
+        confusion_matrix = ML.ConfMat(Predictions, test_labels)
+        DCF, DCFnorm = ML.Bayes_risk(confusion_matrix, pi, Cfn, Cfp)
+        (minDCF, _, _) = ML.minCostBayes(SPost, test_labels, pi, Cfn, Cfp)
+        tablePCA[cont].append([accuracy, DCFnorm, minDCF])
         cont += 1
         for j in reversed(range(i)):
             if j < 2:
@@ -80,10 +95,16 @@ if __name__ == "__main__":
             W, _ = ML.LDA1(reduced_train, train_label, j)
             LDA_train = np.dot(W.T, reduced_train)
             LDA_test = np.dot(W.T, reduced_test)
-            [modelS, _, accuracy] = ML.binaryRegression(
+            [_, SPost, accuracy] = ML.binaryRegression(
                 LDA_train, train_label, l, LDA_test, test_labels
             )
-            tablePCA[cont].append(accuracy)
+            [Predictions, _] = ML.calculate_model(
+                SPost, test_att, "Regression", priorProb, test_labels
+            )
+            confusion_matrix = ML.ConfMat(Predictions, test_labels)
+            DCF, DCFnorm = ML.Bayes_risk(confusion_matrix, pi, Cfn, Cfp)
+            (minDCF, _, _) = ML.minCostBayes(SPost, test_labels, pi, Cfn, Cfp)
+            tablePCA[cont].append([accuracy, DCFnorm, minDCF])
             cont += 1
 
     print("PCA with a 2/3 split")
@@ -96,7 +117,7 @@ if __name__ == "__main__":
     print(f"Size of dataset: {full_train_att.shape[1]}")
     k = int(input("Number of partitions: "))
 
-    [accuracy, modelS] = ML.k_fold(
+    [_, _, accuracy] = ML.k_fold(
         k, full_train_att, full_train_label, priorProb, "regression", l=l
     )
     tableKFold[0].append(accuracy)
@@ -107,7 +128,7 @@ if __name__ == "__main__":
             break
 
         tableKFold.append([f"PCA {i}"])
-        [accuracy, model] = ML.k_fold(
+        [_, _, accuracy] = ML.k_fold(
             k, full_train_att, full_train_label, priorProb, "regression", PCA_m=i, l=l
         )
         tableKFold[cont].append(accuracy)
@@ -117,7 +138,7 @@ if __name__ == "__main__":
             if j < 2:
                 break
             tableKFold.append([f"PCA {i} LDA {j}"])
-            [accuracy, model] = ML.k_fold(
+            [_, _, accuracy] = ML.k_fold(
                 k,
                 full_train_att,
                 full_train_label,
