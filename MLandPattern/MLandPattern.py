@@ -393,7 +393,7 @@ def MVG_log_classifier(
         # print(f'Accuracy: {acc}%')
         # print(f'Error: {(100 - acc)}%')
 
-    return S, predictions, acc
+    return logSMarginal, predictions, acc
 
 
 def Naive_classifier(
@@ -851,7 +851,7 @@ def svm(
     error = np.sum(error)
     error /= test_labels.size
 
-    return S, predictions, 1-error
+    return S, predictions, 1 - error
 
 
 def calculate_model(S, test_points, model, prior_probability, test_labels=[]):
@@ -871,3 +871,87 @@ def calculate_model(S, test_points, model, prior_probability, test_labels=[]):
         error = np.abs(test_labels - predictions)
         error = np.sum(error)
     return predictions, (1 - error)
+
+
+def ConfMat(predicted, actual):
+    labels = np.unique(np.concatenate((actual, predicted)))
+
+    matrix = np.zeros((len(labels), len(labels)), dtype=int)
+
+    for true_label, predicted_label in zip(actual, predicted):
+        true_index = np.where(labels == true_label)[0]
+        predicted_index = np.where(labels == predicted_label)[0]
+        matrix[predicted_index, true_index] += 1
+
+    return matrix
+
+
+def OptimalBayes(llr, labels, pi, Cfn, Cfp):
+    log_odds = llr
+    threshold = -np.log((pi * Cfn) / ((1 - pi) * Cfp))
+    decisions = np.where(log_odds > threshold, 1, 0)
+
+    tp = np.sum(np.logical_and(decisions == 1, labels == 1))
+    fp = np.sum(np.logical_and(decisions == 1, labels == 0))
+    tn = np.sum(np.logical_and(decisions == 0, labels == 0))
+    fn = np.sum(np.logical_and(decisions == 0, labels == 1))
+
+    confusion_matrix = np.array([[tn, fn], [fp, tp]])
+
+    return confusion_matrix
+
+
+def Bayes_risk(confusion_matrix, pi, Cfn, Cfp):
+    M01 = confusion_matrix[0][1]
+    M11 = confusion_matrix[1][1]
+    M10 = confusion_matrix[1][0]
+    M00 = confusion_matrix[0][0]
+
+    FNR = M01 / (M01 + M11)
+    FPR = M10 / (M00 + M10)
+
+    DCF = pi * Cfn * FNR + (1 - pi) * Cfp * FPR
+
+    B = min(pi * Cfn, (1 - pi) * Cfp)
+
+    DCFnorm = DCF / B
+
+    return DCF, round(DCFnorm, 2)
+
+
+def minCostBayes(llr, labels, pi, Cfn, Cfp):
+    sortedLLR = np.sort(llr)
+    t = np.array([-np.inf, np.inf])
+    t = np.append(t, sortedLLR)
+    t = np.sort(t)
+    DCFnorm = []
+    FNRlist = []
+    FPRlist = []
+    for i in t:
+        threshold = i
+        decisions = np.where(llr > threshold, 1, 0)
+
+        tp = np.sum(np.logical_and(decisions == 1, labels == 1))
+        fp = np.sum(np.logical_and(decisions == 1, labels == 0))
+        tn = np.sum(np.logical_and(decisions == 0, labels == 0))
+        fn = np.sum(np.logical_and(decisions == 0, labels == 1))
+
+        confusion_matrix = np.array([[tn, fn], [fp, tp]])
+        M01 = confusion_matrix[0][1]
+        M11 = confusion_matrix[1][1]
+        M10 = confusion_matrix[1][0]
+        M00 = confusion_matrix[0][0]
+
+        FNR = M01 / (M01 + M11)
+        FPR = M10 / (M00 + M10)
+
+        DCF = pi * Cfn * FNR + (1 - pi) * Cfp * FPR
+
+        B = min(pi * Cfn, (1 - pi) * Cfp)
+
+        FNRlist = np.append(FNRlist, FNR)
+        FPRlist = np.append(FPRlist, FPR)
+        DCFnorm = np.append(DCFnorm, DCF / B)
+    minDCF = min(DCFnorm)
+
+    return round(minDCF, 2), FPRlist, FNRlist
