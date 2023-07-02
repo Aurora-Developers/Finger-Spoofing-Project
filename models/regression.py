@@ -57,12 +57,10 @@ if __name__ == "__main__":
 
     tablePCA.append(["Full"])
 
-    [_, SPost, accuracy] = ML.binaryRegression(
+    [Predictions, SPost, accuracy] = ML.binaryRegression(
         train_att, train_label, 0.001, test_att, test_labels
     )
-    [Predictions, _] = ML.calculate_model(
-        SPost, test_att, "Regression", priorProb, test_labels
-    )
+
     confusion_matrix = ML.ConfMat(Predictions, test_labels)
     DCF, DCFnorm = ML.Bayes_risk(confusion_matrix, pi, Cfn, Cfp)
     (minDCF, _, _) = ML.minCostBayes(SPost, test_labels, pi, Cfn, Cfp)
@@ -117,10 +115,10 @@ if __name__ == "__main__":
     print(f"Size of dataset: {full_train_att.shape[1]}")
     k = int(input("Number of partitions: "))
 
-    [_, _, accuracy] = ML.k_fold(
+    [_, _, accuracy, DCFNorm, minDCF] = ML.k_fold(
         k, full_train_att, full_train_label, priorProb, "regression", l=l
     )
-    tableKFold[0].append(accuracy)
+    tableKFold[0].append([accuracy, DCFnorm, minDCF])
 
     cont = 1
     for i in reversed(range(10)):
@@ -128,17 +126,17 @@ if __name__ == "__main__":
             break
 
         tableKFold.append([f"PCA {i}"])
-        [_, _, accuracy] = ML.k_fold(
+        [_, _, accuracy, DCFnorm, minDCF] = ML.k_fold(
             k, full_train_att, full_train_label, priorProb, "regression", PCA_m=i, l=l
         )
-        tableKFold[cont].append(accuracy)
+        tableKFold[cont].append([accuracy, DCFnorm, minDCF])
 
         cont += 1
         for j in reversed(range(i)):
             if j < 2:
                 break
             tableKFold.append([f"PCA {i} LDA {j}"])
-            [_, _, accuracy] = ML.k_fold(
+            [_, _, accuracy, DCFnorm, minDCF] = ML.k_fold(
                 k,
                 full_train_att,
                 full_train_label,
@@ -148,7 +146,7 @@ if __name__ == "__main__":
                 LDA_m=j,
                 l=l,
             )
-            tableKFold[cont].append(accuracy)
+            tableKFold[cont].append([accuracy, DCFnorm, minDCF])
             cont += 1
 
     print("PCA with k-fold")
