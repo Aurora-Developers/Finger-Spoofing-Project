@@ -602,7 +602,17 @@ def Generative_models(
 
 
 def k_fold(
-    k, attributes, labels, previous_prob, model="mvg", PCA_m=0, LDA_m=0, l=0.001
+    k,
+    attributes,
+    labels,
+    previous_prob,
+    model="mvg",
+    PCA_m=0,
+    LDA_m=0,
+    l=0.001,
+    pi=0.5,
+    Cfn=1,
+    Cfp=10,
 ):
     """
     Applies a k-fold cross validation on the dataset, applying the specified model.
@@ -626,7 +636,6 @@ def k_fold(
     cont = 0
     low = 0
     high = section_size
-    final_acc = -1
     model = model.lower()
     for i in range(k):
         if not i:
@@ -642,8 +651,11 @@ def k_fold(
                     train_att = np.dot(W.T, train_att)
                     validation_att = np.dot(W.T, validation_att)
             if model == "regression":
-                [S, prediction, acc] = binaryRegression(
+                [prediction, S, acc] = binaryRegression(
                     train_att, train_labels, l, validation_att, validation_labels
+                )
+                [prediction, _] = calculate_model(
+                    S, validation_att, "Regression", previous_prob, validation_labels
                 )
             else:
                 [S, prediction, acc] = Generative_models(
@@ -654,9 +666,13 @@ def k_fold(
                     validation_labels,
                     model,
                 )
+            confusion_matrix = ConfMat(prediction, validation_labels)
+            DCF, DCFnorm = Bayes_risk(confusion_matrix, pi, Cfn, Cfp)
+            (minDCF, _, _) = minCostBayes(S, validation_labels, pi, Cfn, Cfp)
+            final_DCF = DCFnorm
+            final_min_DCF = minDCF
             final_acc = acc
             final_S = S
-            final_prediction = prediction
             continue
         low += section_size
         high += section_size
@@ -676,7 +692,7 @@ def k_fold(
                 train_att = np.dot(W.T, train_att)
                 validation_att = np.dot(W.T, validation_att)
         if model == "regression":
-            [S, prediction, acc] = binaryRegression(
+            [prediction, S, acc] = binaryRegression(
                 train_att, train_labels, l, validation_att, validation_labels
             )
         else:
@@ -688,11 +704,18 @@ def k_fold(
                 validation_labels,
                 model,
             )
+        confusion_matrix = ConfMat(prediction, validation_labels)
+        DCF, DCFnorm = Bayes_risk(confusion_matrix, pi, Cfn, Cfp)
+        (minDCF, _, _) = minCostBayes(S, validation_labels, pi, Cfn, Cfp)
+        final_DCF += DCFnorm
+        final_min_DCF += minDCF
         final_acc += acc
         final_S += S
-    final_acc /= k
+    final_acc = round(final_acc / k, 2)
     final_S /= k
-    return final_S, prediction, final_acc
+    final_DCF = round(final_DCF / k, 2)
+    final_min_DCF = round(final_min_DCF / k, 2)
+    return final_S, prediction, final_acc, final_DCF, final_min_DCF
 
 
 def logreg_obj(v, DTR, LTR, l):
@@ -741,7 +764,7 @@ def binaryRegression(train_attributes, train_labels, l, test_attributes, test_la
     acc /= test_labels.size
     acc = round(acc * 100, 2)
 
-    return w, S, acc
+    return predictions, S, acc
 
 
 def polynomial_kernel(xi, xj, d, C, eps):
@@ -872,15 +895,16 @@ def calculate_model(S, test_points, model, prior_probability, test_labels=[]):
     return predictions, (1 - error)
 
 
-def ConfMat(predicted, actual):
-    labels = np.unique(np.concatenate((actual, predicted)))
+def ConfMat(decisions, actual):
+    labels = np.unique(np.concatenate((actual, decisions)))
 
     matrix = np.zeros((len(labels), len(labels)), dtype=int)
+    tp = np.sum(np.logical_and(decisions == 1, actual == 1))
+    fp = np.sum(np.logical_and(decisions == 1, actual == 0))
+    tn = np.sum(np.logical_and(decisions == 0, actual == 0))
+    fn = np.sum(np.logical_and(decisions == 0, actual == 1))
 
-    for true_label, predicted_label in zip(actual, predicted):
-        true_index = np.where(labels == true_label)[0]
-        predicted_index = np.where(labels == predicted_label)[0]
-        matrix[predicted_index, true_index] += 1
+    matrix = np.array([[tn, fn], [fp, tp]])
 
     return matrix
 
@@ -905,9 +929,14 @@ def Bayes_risk(confusion_matrix, pi, Cfn, Cfp):
     M11 = confusion_matrix[1][1]
     M10 = confusion_matrix[1][0]
     M00 = confusion_matrix[0][0]
-
-    FNR = M01 / (M01 + M11)
-    FPR = M10 / (M00 + M10)
+    if M01 != 0:
+        FNR = M01 / (M01 + M11)
+    else:
+        FNR = 0
+    if M10 != 0:
+        FPR = M10 / (M00 + M10)
+    else:
+        FPR = 0
 
     DCF = pi * Cfn * FNR + (1 - pi) * Cfp * FPR
 
