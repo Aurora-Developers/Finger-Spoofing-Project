@@ -682,7 +682,7 @@ def k_fold(
     all_values = np.c_[attributes.T, labels]
     all_values = np.random.permutation(all_values)
     attributes = all_values[:, 0:10].T
-    labels = all_values[:, -1].astype('int32')
+    labels = all_values[:, -1].astype("int32")
     high = section_size
     model = model.lower()
     for i in range(k):
@@ -977,14 +977,15 @@ def Bayes_risk(confusion_matrix, pi, Cfn, Cfp):
     M11 = confusion_matrix[1][1]
     M10 = confusion_matrix[1][0]
     M00 = confusion_matrix[0][0]
-    if M01 != 0:
-        FNR = M01 / (M01 + M11)
-    else:
-        FNR = 0
-    if M10 != 0:
-        FPR = M10 / (M00 + M10)
-    else:
+    if M00 == 0 and M10 == 0:
+        FNR = 1
         FPR = 0
+    elif M11 == 0 and M01 == 0:
+        FNR = 0
+        FPR = 1
+    else:
+        FPR = M10 / (M00 + M10)
+        FNR = M01 / (M01 + M11)
 
     DCF = pi * Cfn * FNR + (1 - pi) * Cfp * FPR
 
@@ -1023,8 +1024,15 @@ def minCostBayes(llr, labels, pi, Cfn, Cfp):
         M10 = confusion_matrix[1][0]
         M00 = confusion_matrix[0][0]
 
-        FNR = M01 / (M01 + M11)
-        FPR = M10 / (M00 + M10)
+        if M00 == 0 and M10 == 0:
+            FNR = 1
+            FPR = 0
+        elif M11 == 0 and M01 == 0:
+            FNR = 0
+            FPR = 1
+        else:
+            FPR = M10 / (M00 + M10)
+            FNR = M01 / (M01 + M11)
 
         [DCF, DCFnormal] = Bayes_risk(confusion_matrix, pi, Cfn, Cfp)
 
