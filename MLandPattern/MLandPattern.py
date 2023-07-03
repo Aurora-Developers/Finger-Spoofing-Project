@@ -679,6 +679,10 @@ def k_fold(
     section_size = int(attributes.shape[1] / k)
     cont = 0
     low = 0
+    all_values = np.c_[attributes.T, labels]
+    all_values = np.random.permutation(all_values)
+    attributes = all_values[:, 0:10].T
+    labels = all_values[:, -1].astype('int32')
     high = section_size
     model = model.lower()
     for i in range(k):
