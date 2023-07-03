@@ -575,8 +575,10 @@ def Generative_models(
     threshold=10**-6,
     psi=0,
     final=0,
+    quadratic=0,
 ):
     """
+
     Calculates the desired generative model
     :param train_date: matrix of the datapoints of a dataset used to train the model
     :param train_labels: row vector with the labels associated with each row of the training dataset
@@ -689,6 +691,7 @@ def k_fold(
     Cfn=1,
     Cfp=10,
     final=0,
+    quadratic=0,
 ):
     """
     Applies a k-fold cross validation on the dataset, applying the specified model.
@@ -739,14 +742,21 @@ def k_fold(
                         validation_att,
                         validation_labels,
                         final=1,
+                        quadratic=quadratic,
                     )
                     final_w = w
                     final_b = b
                     final_PCA = P
-                    final_LDA = W
+                    if LDA_m:
+                        final_LDA = W
                 else:
                     [prediction, S, acc] = binaryRegression(
-                        train_att, train_labels, l, validation_att, validation_labels
+                        train_att,
+                        train_labels,
+                        l,
+                        validation_att,
+                        validation_labels,
+                        quadratic=quadratic,
                     )
             else:
                 if final:
@@ -805,14 +815,21 @@ def k_fold(
                     validation_att,
                     validation_labels,
                     final=1,
+                    quadratic=quadratic,
                 )
                 final_w += w
                 final_b += b
                 final_PCA += P
-                final_LDA += W
+                if LDA_m:
+                    final_LDA += W
             else:
                 [prediction, S, acc] = binaryRegression(
-                    train_att, train_labels, l, validation_att, validation_labels
+                    train_att,
+                    train_labels,
+                    l,
+                    validation_att,
+                    validation_labels,
+                    quadratic=quadratic,
                 )
         else:
             if final:
@@ -852,7 +869,19 @@ def k_fold(
         final_w /= k
         final_b /= k
         final_PCA /= k
-        final_LDA /= k
+        if LDA_m:
+            final_LDA /= k
+            return (
+                final_S,
+                prediction,
+                final_acc,
+                final_DCF,
+                final_min_DCF,
+                final_w,
+                final_b,
+                final_PCA,
+                final_LDA,
+            )
         return (
             final_S,
             prediction,
@@ -862,7 +891,6 @@ def k_fold(
             final_w,
             final_b,
             final_PCA,
-            final_LDA,
         )
     elif final:
         final_mu /= k
@@ -902,7 +930,13 @@ def logreg_obj(v, DTR, LTR, l):
 
 
 def binaryRegression(
-    train_attributes, train_labels, l, test_attributes, test_labels, final=0
+    train_attributes,
+    train_labels,
+    l,
+    test_attributes,
+    test_labels,
+    final=0,
+    quadratic=0,
 ):
     """
     Method to calculate the error of a function based on the data points
@@ -915,6 +949,12 @@ def binaryRegression(
     :return predictions: Vector associated with the prediction of the class for each test data point
     :return acc: Accuracy of the validation set
     """
+    if quadratic == 1:
+        xxt = np.dot(train_attributes.T, train_attributes).diagonal().reshape((1, -1))
+        train_attributes = np.vstack((xxt, train_attributes))
+
+        zzt = np.dot(test_attributes.T, test_attributes).diagonal().reshape((1, -1))
+        test_attributes = np.vstack((zzt, test_attributes))
     x0 = np.zeros(train_attributes.shape[0] + 1)
     x, f, d = scipy.optimize.fmin_l_bfgs_b(
         logreg_obj, x0, approx_grad=True, args=(train_attributes, train_labels, l)
@@ -1018,7 +1058,6 @@ def svm(
         alp,
         args=(training_att, training_labels, K, dim, c, eps, gamma, model),
         bounds=constrain,
-        iprint=1,
     )
     zi = 2 * training_labels - 1
     kern = model.lower()

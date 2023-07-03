@@ -12,10 +12,11 @@ import MLandPattern as ML
 tableTrain = []
 tableTest = []
 headers = [
-    "Gaussian  MVG (PCA 8 / k=20)",
-    "GMM Full (Full, [0.1, 2, 0.01])",
-    "LR PCA8 LDA3 (l=10-6)",
-    "SVM Polynomial (PCA 7, [1, 0, 2 ,0]",
+    "Gaussian MVG PCA 8  kfold=20",
+    "GMM Full Full, [0.1, 2, 0.01]",
+    "SVM Polynomial PCA 7, [1, 0, 2 ,0]",
+    "LR PCA8 LDA3 kfold=20 l=10-6",
+    "QR PCA7 k_fold=20 l=10-1",
 ]
 pi = 0.5
 Cfn = 1
@@ -79,6 +80,13 @@ def calculate_model(
         b = args[1]
         S = np.dot(w.T, test_points) + b
         predictions = np.array(list(map(funct, S)))
+    elif model == "quadratic":
+        xt_2 = np.dot(test_points.T, test_points).diagonal().reshape((1, -1))
+        test_points = np.vstack((xt_2, test_points))
+        w = args[0]
+        b = args[1]
+        S = np.dot(w.T, test_points) + b
+        predictions = np.array(list(map(funct, S)))
     elif model == "gmm":
         class_mu = args[0]
         class_c = args[1]
@@ -111,7 +119,7 @@ if __name__ == "__main__":
     minDCffull_list = []
     minDCf8_list = []
 
-    tot_iter = 8
+    tot_iter = 10
     perc = 1
 
     pathTrain = os.path.abspath("data/Train.txt")
@@ -154,6 +162,9 @@ if __name__ == "__main__":
         psi=0.01,
         final=1,
     )
+    confusion_matrix = ML.ConfMat(Predictions, validation_labels)
+    DCF, DCFnorm = ML.Bayes_risk(confusion_matrix, pi, Cfn, Cfp)
+    (minDCF, FPRlist, FNRlist) = ML.minCostBayes(SPost, validation_labels, pi, Cfn, Cfp)
     tableTrain[0].append([accuracy, DCFnorm, minDCF])
     print(f"{round(perc * 100 / tot_iter, 2)}%")
     perc += 1
@@ -172,7 +183,7 @@ if __name__ == "__main__":
         train_label,
         PCA_7_validation_att,
         validation_labels,
-        1,
+        constrain=1,
         dim=2,
         c=0,
         eps=0**2,
@@ -216,6 +227,28 @@ if __name__ == "__main__":
     LDA_test = np.dot(L.T, np.dot(P.T, full_test_att))
     [Predictions, acc, DCFnorm, minDCF] = calculate_model(
         [w, b], LDA_test, "regression", priorProb, full_test_labels
+    )
+    tableTest[0].append([round(acc * 100, 2), DCFnorm, minDCF])
+    print(f"{round(perc * 100 / tot_iter, 2)}%")
+    perc += 1
+
+    [_, Predictions, accuracy, DCFnorm, minDCF, w, b, PQ] = ML.k_fold(
+        20,
+        full_train_att,
+        full_train_label,
+        priorProb,
+        model="regression",
+        PCA_m=7,
+        l=10**-1,
+        final=1,
+        quadratic=1,
+    )
+    tableTrain[0].append([accuracy, DCFnorm, minDCF])
+    print(f"{round(perc * 100 / tot_iter, 2)}%")
+    perc += 1
+    PCA_test = np.dot(PQ.T, full_test_att)
+    [Predictions, acc, DCFnorm, minDCF] = calculate_model(
+        [w, b], PCA_test, "quadratic", priorProb, full_test_labels
     )
     tableTest[0].append([round(acc * 100, 2), DCFnorm, minDCF])
     print(f"{round(perc * 100 / tot_iter, 2)}%")
