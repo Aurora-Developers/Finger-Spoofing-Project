@@ -562,7 +562,16 @@ def Tied_Naive_classifier(
 
 
 def Generative_models(
-    train_attributes, train_labels, test_attributes, prior_prob, test_labels, model
+    train_attributes,
+    train_labels,
+    test_attributes,
+    prior_prob,
+    test_labels,
+    model,
+    niter=0,
+    alpha=0.1,
+    threshold=10**-6,
+    psi=0,
 ):
     """
     Calculates the desired generative model
@@ -598,6 +607,41 @@ def Generative_models(
             train_attributes, train_labels, test_attributes, prior_prob, test_labels
         )
         accuracy = round(accuracy * 100, 2)
+    elif model.lower() == "gmm":
+        [Probabilities, Prediction, accuracy] = GMM(
+            train_attributes,
+            train_labels,
+            test_attributes,
+            test_labels,
+            niter=niter,
+            alpha=alpha,
+            threshold=threshold,
+            psi=psi,
+        )
+    elif model.lower() == "diagonal":
+        [Probabilities, Prediction, accuracy] = GMM(
+            train_attributes,
+            train_labels,
+            test_attributes,
+            test_labels,
+            niter=niter,
+            alpha=alpha,
+            threshold=threshold,
+            psi=psi,
+            diag=1,
+        )
+    elif model.lower() == "tied":
+        [Probabilities, Prediction, accuracy] = GMM(
+            train_attributes,
+            train_labels,
+            test_attributes,
+            test_labels,
+            niter=niter,
+            alpha=alpha,
+            threshold=threshold,
+            psi=psi,
+            tied=1,
+        )
     return Probabilities, Prediction, accuracy
 
 
@@ -986,3 +1030,178 @@ def minCostBayes(llr, labels, pi, Cfn, Cfp):
     minDCF = min(DCFnorm)
 
     return minDCF, FPRlist, FNRlist
+
+
+def ll_gaussian(x, mu, C):
+    M = mu[0].shape[0]
+    s = []
+    for i in range(len(C)):
+        inv_C = np.linalg.inv(C[i])
+        # print(inv_C.shape)
+        [_, log_C] = np.linalg.slogdet(C[i])
+        log_2pi = -M * math.log(2 * math.pi)
+        x_norm = x - vcol(mu[i])
+        inter_value = np.dot(x_norm.T, inv_C)
+        dot_mul = np.dot(inter_value, x_norm)
+        dot_mul = np.diag(dot_mul)
+        y = (log_2pi - log_C - dot_mul) / 2
+        s.append(y)
+    return s
+
+
+def EM(x, mu, cov, w, threshold=10**-6, psi=0, diag=0, tied=0):
+    delta = 100
+    previous_ll = 10
+    cont = 1000
+    mu = np.array(mu)
+    cov = np.array(cov)
+    if diag:
+        cov = cov * np.eye(cov.shape[1])
+    if tied:
+        cov[:] = np.sum(cov, axis=0) / x.shape[1]
+    if psi:
+        for i in range(cov.shape[0]):
+            U, s, _ = np.linalg.svd(cov[i])
+            s[s < psi] = psi
+            cov[i] = np.dot(U, vcol(s) * U.T)
+    w = vcol(np.array((w)))
+    while (delta > threshold) and (cont > 0):
+        #### E-STEP ####
+        ll = np.array(ll_gaussian(x, mu, cov))
+        SJoint = ll + np.log(w)
+        logSMarginal = scipy.special.logsumexp(SJoint, axis=0)
+        logSPost = SJoint - logSMarginal
+        SPost = np.exp(logSPost)
+
+        #### M - STEP ####
+        fg = np.dot(SPost, x.T)
+        zg = vcol(np.sum(SPost, axis=1))
+        sg = []
+        n_mu = fg / zg
+        new_C = []
+        mul = []
+        for i in range(mu.shape[0]):
+            psg = np.zeros((x.shape[0], x.shape[0]))
+            for j in range(x.shape[1]):
+                xi = x[:, j].reshape((-1, 1))
+                xii = np.dot(xi, xi.T)
+                psg += SPost[i, j] * xii
+            mul.append(np.dot(vcol(n_mu[i, :]), vcol(n_mu[i, :]).T))
+            sg.append(psg)
+        div = np.array(sg) / zg.reshape((-1, 1, 1))
+        new_mu = np.array(n_mu)
+        mul = np.array(mul)
+        new_C = div - mul
+        new_w = vcol(zg / np.sum(zg, axis=0))
+        if diag:
+            new_C = new_C * np.eye(new_C.shape[1])
+        if tied:
+            new_C[:] = np.sum(new_C, axis=0) / x.shape[1]
+        if psi:
+            for i in range(new_C.shape[0]):
+                U, s, _ = np.linalg.svd(new_C[i])
+                s[s < psi] = psi
+                new_C[i] = np.dot(U, vcol(s) * U.T)
+        previous_ll = np.sum(logSMarginal) / x.shape[1]
+        s = np.array(ll_gaussian(x, new_mu, new_C))
+        newJoint = s + np.log(new_w)
+        new_marginal = scipy.special.logsumexp(newJoint, axis=0)
+        avg_ll = np.sum(new_marginal) / x.shape[1]
+        delta = abs(previous_ll - avg_ll)
+        previous_ll = avg_ll
+        mu = new_mu
+        cov = new_C
+        w = new_w
+        cont -= 1
+        # print(delta)
+    return avg_ll, mu, cov, w
+
+
+def GMM(
+    train_data,
+    train_labels,
+    test_data,
+    test_label,
+    niter,
+    alpha,
+    threshold,
+    psi=0,
+    diag=0,
+    tied=0,
+):
+    class_labels = np.unique(train_labels)
+    cov = multiclass_covariance(train_data, train_labels)
+    multi_mu = multiclass_mean(train_data, train_labels)
+    densities = []
+    class_mu = []
+    class_c = []
+    class_w = []
+    for i in class_labels:
+        [_, mu, cov, w] = LBG(
+            train_data[:, train_labels == i],
+            niter=niter,
+            alpha=alpha,
+            psi=psi,
+            diag=diag,
+            tied=tied,
+        )
+        class_mu.append(mu)
+        class_c.append(cov)
+        class_w.append(w)
+    class_mu = np.array(class_mu)
+    class_c = np.array(class_c)
+    class_w = np.array(class_w)
+    densities = []
+    for i in class_labels:
+        ll = np.array(ll_gaussian(test_data, class_mu[i], class_c[i]))
+        Sjoin = ll + np.log(class_w[i].reshape((-1, 1)))
+        logdens = scipy.special.logsumexp(Sjoin, axis=0)
+        densities.append(logdens)
+    S = np.array(densities)
+    # SJoint = S + np.log(class_w)
+    # logSMarginal = scipy.special.logsumexp(SJoint, axis=0)
+    # logSPost = SJoint - logSMarginal
+    # SPost = np.exp(logSPost)
+    predictions = np.argmax(S, axis=0)
+    if len(test_label) != 0:
+        acc = 0
+        for i in range(len(test_label)):
+            if predictions[i] == test_label[i]:
+                acc += 1
+        acc /= len(test_label)
+        acc = round(acc * 100, 2)
+        # print(f'Accuracy: {acc}%')
+        # print(f'Error: {(100 - acc)}%')
+
+    return S, predictions, acc
+
+
+def LBG(x, niter, alpha, psi=0, diag=0, tied=0):
+    mu = mean_of_matrix_rows(x)
+    mu = mu.reshape((1, mu.shape[0], mu.shape[1]))
+    C = covariance(x)
+    C = C.reshape((1, C.shape[0], C.shape[1]))
+    w = np.ones(1).reshape(-1, 1, 1)
+    if not niter:
+        [ll, mu, C, w] = EM(x, mu, C, w, psi=psi, diag=diag, tied=tied)
+        mu = mu.reshape((-1, mu.shape[1], 1))
+        w = w.reshape((-1, 1, 1))
+    new_gmm = []
+    for i in range(niter):
+        new_mu = []
+        new_cov = []
+        new_w = []
+        for i in range(len(mu)):
+            U, s, _ = np.linalg.svd(C[i])
+            d = U[:, 0:1] * s[0] ** 0.5 * alpha
+            new_w.append(w[i] / 2)
+            new_w.append(w[i] / 2)
+            new_mu.append(mu[i] + d)
+            new_mu.append(mu[i] - d)
+            new_cov.append(C[i])
+            new_cov.append(C[i])
+        [ll, mu, C, w] = EM(x, new_mu, new_cov, new_w, psi=psi, diag=diag, tied=tied)
+        mu = mu.reshape((-1, mu.shape[1], 1))
+        w = w.reshape((-1, 1, 1))
+    # print(gmm)
+    return ll, mu, C, w
