@@ -7,7 +7,7 @@ import sys
 sys.path.append(os.path.abspath("MLandPattern"))
 import MLandPattern as ML
 
-class_label = ["0", "1"]
+class_label = ["spoofed fingerprint", " authentic fingerprint"]
 attribute_names = []
 alpha_val = 0.5
 
@@ -24,21 +24,18 @@ def load(pathname, vizualization=0):
     return attribute, label
 
 
-jhb
-
-
-def histogram_1n(setosa, versicolor, x_axis="", y_axis=""):
-    plt.hist(setosa, color="blue", alpha=alpha_val, label=class_label[0], density=True)
+def histogram_1n(spoofed, authentic, x_axis="", y_axis=""):
+    plt.hist(spoofed, color="blue", alpha=alpha_val, label=class_label[0], density=True)
     plt.hist(
-        versicolor, color="orange", alpha=alpha_val, label=class_label[1], density=True
+        authentic, color="orange", alpha=alpha_val, label=class_label[1], density=True
     )
     plt.xlabel(x_axis)
     plt.ylabel(y_axis)
 
 
-def scatter_2d(setosa, versicolor, x_axis="", y_axis=""):
-    plt.scatter(setosa[0], setosa[1], c="blue", s=1.5)
-    plt.scatter(versicolor[0], versicolor[1], c="orange", s=1.5)
+def scatter_2d(spoofed, authentic, x_axis="", y_axis=""):
+    plt.scatter(spoofed[0], spoofed[1], c="blue", s=1.5)
+    plt.scatter(authentic[0], authentic[1], c="orange", s=1.5)
     plt.xlabel(x_axis)
     plt.ylabel(y_axis)
 
@@ -105,7 +102,7 @@ def graficar(attributes):
 def independent_graph(attributes):
     attribute_names = []
     for i in range(attributes.shape[0]):
-        attribute_names.append(str(i))
+        attribute_names.append(f"Histogram dimension {i}")
     values_histogram = {}
 
     for i in range(len(attribute_names)):
@@ -161,8 +158,14 @@ def PCA(attribute_matrix, m):
 if __name__ == "__main__":
     path = os.path.abspath("data/Train.txt")
     [attributes, labels] = load(path)
+    for i in range(attributes.shape[0]):
+        print(f"max {i}: {max(attributes[i])}", end="\t")
+        print(f"min {i}: {min(attributes[i])}")
     print(f"Attribute dimensions: {attributes.shape[0]}")
     print(f"Points on the dataset: {attributes.shape[1]}")
+    print(
+        f"Distribution of labels (1, 0): {labels[labels==1].shape}, {labels[labels==0].shape}"
+    )
     print(f"Possible classes: {class_label[0]}, {class_label[1]}")
     configure = input("Analyze whole dataset (1), or a PCA reduction (2) exit(0): ")
     while configure != "0":

@@ -8,8 +8,9 @@ import sys
 sys.path.append(os.path.abspath("MLandPattern"))
 import MLandPattern as ML
 
-tablePCA = []
-tableKFold = []
+tableGMM = []
+tableDiag = []
+tableTied = []
 headers = [
     "GMM:[0.1, 0, 0.01]",
     "GMM:[0.1, 1, 0.01]",
@@ -66,7 +67,9 @@ if __name__ == "__main__":
     (train_att, train_label), (test_att, test_labels) = ML.split_db(
         full_train_att, full_train_label, 2 / 3
     )
-    tablePCA.append(["Full"])
+    tableGMM.append(["Full"])
+    tableDiag.append(["Full"])
+    tableTied.append(["Full"])
 
     for model in headers:
         ref = model.split(":")
@@ -87,9 +90,14 @@ if __name__ == "__main__":
         confusion_matrix = ML.ConfMat(Predictions, test_labels)
         DCF, DCFnorm = ML.Bayes_risk(confusion_matrix, pi, Cfn, Cfp)
         (minDCF, FPRlist, FNRlist) = ML.minCostBayes(SPost, test_labels, pi, Cfn, Cfp)
-        tablePCA[0].append([accuracy, DCFnorm, minDCF])
+        if mod == "GMM":
+            tableGMM[0].append([accuracy, DCFnorm, minDCF])
+        elif mod == "Diagonal":
+            tableDiag[0].append([accuracy, DCFnorm, minDCF])
+        elif mod == "Tied":
+            tableTied[0].append([accuracy, DCFnorm, minDCF])
         perc += 1
-        print(f"{round(perc * 100 / total_iter, 2)}%", end="\t")
+        print(f"{round(perc * 100 / total_iter, 2)}%")
     print()
     cont = 1
     for i in reversed(range(10)):
@@ -98,7 +106,9 @@ if __name__ == "__main__":
         P, reduced_train = ML.PCA(train_att, i)
         reduced_test = np.dot(P.T, test_att)
 
-        tablePCA.append([f"PCA {i}"])
+        tableGMM.append([f"PCA {i}"])
+        tableDiag.append([f"PCA {i}"])
+        tableTied.append([f"PCA {i}"])
         for model in headers:
             ref = model.split(":")
             mod = ref[0]
@@ -120,7 +130,12 @@ if __name__ == "__main__":
             (minDCF, FPRlist, FNRlist) = ML.minCostBayes(
                 SPost, test_labels, pi, Cfn, Cfp
             )
-            tablePCA[cont].append([accuracy, DCFnorm, minDCF])
+            if mod == "GMM":
+                tableGMM[cont].append([accuracy, DCFnorm, minDCF])
+            elif mod == "Diagonal":
+                tableDiag[cont].append([accuracy, DCFnorm, minDCF])
+            elif mod == "Tied":
+                tableTied[cont].append([accuracy, DCFnorm, minDCF])
             perc += 1
             print(f"{round(perc * 100 / total_iter, 2)}%", end="\t")
         print()
@@ -128,7 +143,9 @@ if __name__ == "__main__":
         for j in reversed(range(i)):
             if j < 2:
                 break
-            tablePCA.append([f"PCA {i} LDA {j}"])
+            tableGMM.append([f"PCA {i} LDA {j}"])
+            tableDiag.append([f"PCA {i} LDA {j}"])
+            tableTied.append([f"PCA {i} LDA {j}"])
             W, _ = ML.LDA1(reduced_train, train_label, j)
             LDA_train = np.dot(W.T, reduced_train)
             LDA_test = np.dot(W.T, reduced_test)
@@ -153,7 +170,12 @@ if __name__ == "__main__":
                 (minDCF, FPRlist, FNRlist) = ML.minCostBayes(
                     SPost, test_labels, pi, Cfn, Cfp
                 )
-                tablePCA[cont].append([accuracy, DCFnorm, minDCF])
+                if mod == "GMM":
+                    tableGMM[cont].append([accuracy, DCFnorm, minDCF])
+                elif mod == "Diagonal":
+                    tableDiag[cont].append([accuracy, DCFnorm, minDCF])
+                elif mod == "Tied":
+                    tableTied[cont].append([accuracy, DCFnorm, minDCF])
                 perc += 1
                 print(f"{round(perc * 100 / total_iter, 2)}%", end="\t")
             print()
@@ -161,8 +183,12 @@ if __name__ == "__main__":
     # headersPCA = []
     # for i in headers:
     #     headersPCA.append(i + " Acc/DCF/MinDCF")
-    print("PCA with a 2/3 split")
-    print(tabulate(tablePCA, headers=headers))
+    print("PCA GMM with a 2/3 split")
+    print(tabulate(tableGMM, headers=headers[0:3]))
+    print("PCA Diagonal with a 2/3 split")
+    print(tabulate(tableDiag, headers=headers[3:6]))
+    print("PCA Tied with a 2/3 split")
+    print(tabulate(tableTied, headers=headers[6:]))
 
     ### ------------- k-fold with different PCA ---------------------- ####
     # headers = ["MVG", "Naive", "Tied Gaussian", "Tied Naive"]

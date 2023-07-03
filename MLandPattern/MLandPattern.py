@@ -355,7 +355,7 @@ def MVG_classifier(train_data, train_labels, test_data, test_label, prior_probab
 
 
 def MVG_log_classifier(
-    train_data, train_labels, test_data, prior_probability, test_label=[]
+    train_data, train_labels, test_data, prior_probability, test_label=[], final=0
 ):
     """
     Calculates the model of the MultiVariate Gaussian classifier on the logarithm dimension for a set of data, and applyes it to a test dataset
@@ -392,8 +392,10 @@ def MVG_log_classifier(
         acc = round(acc * 100, 2)
         # print(f'Accuracy: {acc}%')
         # print(f'Error: {(100 - acc)}%')
-
-    return S, predictions, acc
+    if final:
+        return S, predictions, acc, multi_mu, cov
+    else:
+        return S, predictions, acc
 
 
 def Naive_classifier(
@@ -572,6 +574,7 @@ def Generative_models(
     alpha=0.1,
     threshold=10**-6,
     psi=0,
+    final=0,
 ):
     """
     Calculates the desired generative model
@@ -590,9 +593,19 @@ def Generative_models(
     :return acc: Accuracy of the validation set
     """
     if model.lower() == "mvg":
-        [Probabilities, Prediction, accuracy] = MVG_log_classifier(
-            train_attributes, train_labels, test_attributes, prior_prob, test_labels
-        )
+        if final:
+            [Probabilities, Prediction, accuracy, mu, cov] = MVG_log_classifier(
+                train_attributes,
+                train_labels,
+                test_attributes,
+                prior_prob,
+                test_labels,
+                final,
+            )
+        else:
+            [Probabilities, Prediction, accuracy] = MVG_log_classifier(
+                train_attributes, train_labels, test_attributes, prior_prob, test_labels
+            )
     elif model.lower() == "naive":
         [Probabilities, Prediction, accuracy] = Naive_log_classifier(
             train_attributes, train_labels, test_attributes, prior_prob, test_labels
@@ -608,16 +621,29 @@ def Generative_models(
         )
         accuracy = round(accuracy * 100, 2)
     elif model.lower() == "gmm":
-        [Probabilities, Prediction, accuracy] = GMM(
-            train_attributes,
-            train_labels,
-            test_attributes,
-            test_labels,
-            niter=niter,
-            alpha=alpha,
-            threshold=threshold,
-            psi=psi,
-        )
+        if final:
+            [Probabilities, Prediction, accuracy, mu, cov, w] = GMM(
+                train_attributes,
+                train_labels,
+                test_attributes,
+                test_labels,
+                niter=niter,
+                alpha=alpha,
+                threshold=threshold,
+                psi=psi,
+                final=final,
+            )
+        else:
+            [Probabilities, Prediction, accuracy] = GMM(
+                train_attributes,
+                train_labels,
+                test_attributes,
+                test_labels,
+                niter=niter,
+                alpha=alpha,
+                threshold=threshold,
+                psi=psi,
+            )
     elif model.lower() == "diagonal":
         [Probabilities, Prediction, accuracy] = GMM(
             train_attributes,
@@ -642,7 +668,12 @@ def Generative_models(
             psi=psi,
             tied=1,
         )
-    return Probabilities, Prediction, accuracy
+    if final and model == "mvg":
+        return Probabilities, Prediction, accuracy, mu, cov
+    elif final and model == "gmm":
+        return Probabilities, Prediction, accuracy, mu, cov, w
+    else:
+        return Probabilities, Prediction, accuracy
 
 
 def k_fold(
@@ -657,6 +688,7 @@ def k_fold(
     pi=0.5,
     Cfn=1,
     Cfp=10,
+    final=0,
 ):
     """
     Applies a k-fold cross validation on the dataset, applying the specified model.
@@ -699,21 +731,46 @@ def k_fold(
                     train_att = np.dot(W.T, train_att)
                     validation_att = np.dot(W.T, validation_att)
             if model == "regression":
-                [prediction, S, acc] = binaryRegression(
-                    train_att, train_labels, l, validation_att, validation_labels
-                )
-                [prediction, _] = calculate_model(
-                    S, validation_att, "Regression", previous_prob, validation_labels
-                )
+                if final:
+                    [prediction, S, acc, w, b] = binaryRegression(
+                        train_att,
+                        train_labels,
+                        l,
+                        validation_att,
+                        validation_labels,
+                        final=1,
+                    )
+                    final_w = w
+                    final_b = b
+                    final_PCA = P
+                    final_LDA = W
+                else:
+                    [prediction, S, acc] = binaryRegression(
+                        train_att, train_labels, l, validation_att, validation_labels
+                    )
             else:
-                [S, prediction, acc] = Generative_models(
-                    train_att,
-                    train_labels,
-                    validation_att,
-                    previous_prob,
-                    validation_labels,
-                    model,
-                )
+                if final:
+                    [S, prediction, acc, mu, cov] = Generative_models(
+                        train_att,
+                        train_labels,
+                        validation_att,
+                        previous_prob,
+                        validation_labels,
+                        model,
+                        final=final,
+                    )
+                    final_w = P
+                    final_mu = mu
+                    final_cov = cov
+                else:
+                    [S, prediction, acc] = Generative_models(
+                        train_att,
+                        train_labels,
+                        validation_att,
+                        previous_prob,
+                        validation_labels,
+                        model,
+                    )
             confusion_matrix = ConfMat(prediction, validation_labels)
             DCF, DCFnorm = Bayes_risk(confusion_matrix, pi, Cfn, Cfp)
             (minDCF, _, _) = minCostBayes(S, validation_labels, pi, Cfn, Cfp)
@@ -740,18 +797,46 @@ def k_fold(
                 train_att = np.dot(W.T, train_att)
                 validation_att = np.dot(W.T, validation_att)
         if model == "regression":
-            [prediction, S, acc] = binaryRegression(
-                train_att, train_labels, l, validation_att, validation_labels
-            )
+            if final:
+                [prediction, S, acc, w, b] = binaryRegression(
+                    train_att,
+                    train_labels,
+                    l,
+                    validation_att,
+                    validation_labels,
+                    final=1,
+                )
+                final_w += w
+                final_b += b
+                final_PCA += P
+                final_LDA += W
+            else:
+                [prediction, S, acc] = binaryRegression(
+                    train_att, train_labels, l, validation_att, validation_labels
+                )
         else:
-            [S, prediction, acc] = Generative_models(
-                train_att,
-                train_labels,
-                validation_att,
-                previous_prob,
-                validation_labels,
-                model,
-            )
+            if final:
+                [S, prediction, acc, mu, cov] = Generative_models(
+                    train_att,
+                    train_labels,
+                    validation_att,
+                    previous_prob,
+                    validation_labels,
+                    model,
+                    final=final,
+                )
+                final_mu += mu
+                final_cov += cov
+                final_w += P
+            else:
+                [S, prediction, acc] = Generative_models(
+                    train_att,
+                    train_labels,
+                    validation_att,
+                    previous_prob,
+                    validation_labels,
+                    model,
+                )
         confusion_matrix = ConfMat(prediction, validation_labels)
         DCF, DCFnorm = Bayes_risk(confusion_matrix, pi, Cfn, Cfp)
         (minDCF, _, _) = minCostBayes(S, validation_labels, pi, Cfn, Cfp)
@@ -763,7 +848,38 @@ def k_fold(
     final_S /= k
     final_DCF = round(final_DCF / k, 2)
     final_min_DCF = round(final_min_DCF / k, 2)
-    return final_S, prediction, final_acc, final_DCF, final_min_DCF
+    if model == "regression" and final:
+        final_w /= k
+        final_b /= k
+        final_PCA /= k
+        final_LDA /= k
+        return (
+            final_S,
+            prediction,
+            final_acc,
+            final_DCF,
+            final_min_DCF,
+            final_w,
+            final_b,
+            final_PCA,
+            final_LDA,
+        )
+    elif final:
+        final_mu /= k
+        final_cov /= k
+        final_w /= k
+        return (
+            final_S,
+            prediction,
+            final_acc,
+            final_DCF,
+            final_min_DCF,
+            final_mu,
+            final_cov,
+            final_w,
+        )
+    else:
+        return final_S, prediction, final_acc, final_DCF, final_min_DCF
 
 
 def logreg_obj(v, DTR, LTR, l):
@@ -785,7 +901,9 @@ def logreg_obj(v, DTR, LTR, l):
     return retFunc
 
 
-def binaryRegression(train_attributes, train_labels, l, test_attributes, test_labels):
+def binaryRegression(
+    train_attributes, train_labels, l, test_attributes, test_labels, final=0
+):
     """
     Method to calculate the error of a function based on the data points
     :param train_attributes: Matrix with all the train attributes
@@ -811,8 +929,10 @@ def binaryRegression(train_attributes, train_labels, l, test_attributes, test_la
             acc += 1
     acc /= test_labels.size
     acc = round(acc * 100, 2)
-
-    return predictions, S, acc
+    if final:
+        return predictions, S, acc, w, b
+    else:
+        return predictions, S, acc
 
 
 def polynomial_kernel(xi, xj, d, C, eps):
@@ -872,6 +992,7 @@ def svm(
     K=1,
     gamma=1,
     eps=0,
+    final=0,
 ):
     """
     Apply the Support Vector Machine model, using either one of the models described to approximate the soluction.
@@ -897,8 +1018,8 @@ def svm(
         alp,
         args=(training_att, training_labels, K, dim, c, eps, gamma, model),
         bounds=constrain,
+        iprint=1,
     )
-    print(d["nit"])
     zi = 2 * training_labels - 1
     kern = model.lower()
     if kern == "polynomial":
@@ -920,8 +1041,10 @@ def svm(
     error = np.abs(predictions - test_labels)
     error = np.sum(error)
     error /= test_labels.size
-
-    return S, predictions, 1 - error
+    if final:
+        return S, predictions, 1 - error, x
+    else:
+        return S, predictions, 1 - error
 
 
 def calculate_model(S, test_points, model, prior_probability, test_labels=[]):
@@ -1140,6 +1263,7 @@ def GMM(
     psi=0,
     diag=0,
     tied=0,
+    final=0,
 ):
     class_labels = np.unique(train_labels)
     cov = multiclass_covariance(train_data, train_labels)
@@ -1170,10 +1294,6 @@ def GMM(
         logdens = scipy.special.logsumexp(Sjoin, axis=0)
         densities.append(logdens)
     S = np.array(densities)
-    # SJoint = S + np.log(class_w)
-    # logSMarginal = scipy.special.logsumexp(SJoint, axis=0)
-    # logSPost = SJoint - logSMarginal
-    # SPost = np.exp(logSPost)
     predictions = np.argmax(S, axis=0)
     if len(test_label) != 0:
         acc = 0
@@ -1184,8 +1304,10 @@ def GMM(
         acc = round(acc * 100, 2)
         # print(f'Accuracy: {acc}%')
         # print(f'Error: {(100 - acc)}%')
-
-    return S, predictions, acc
+    if final:
+        return S, predictions, acc, class_mu, class_c, class_w
+    else:
+        return S, predictions, acc
 
 
 def LBG(x, niter, alpha, psi=0, diag=0, tied=0):
